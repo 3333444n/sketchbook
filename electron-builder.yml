@@ -1,43 +1,74 @@
-appId: com.electron.app
-productName: sketchbook
+appId: com.sketchbook.app
+productName: Sketchbook
+copyright: Copyright © 2026 kickeortiz
 directories:
   buildResources: build
+  output: dist
+asar: true
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  - '!tests/*'
+  - '!scripts/*'
+  - '!test-results/*'
+  - '!playwright-report/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!playwright.config.{js,ts}'
+  - '!vitest.config.{js,ts,mjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,pnpm-workspace.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Everything the app needs at runtime is bundled into out/ by electron-vite.
+  - '!node_modules/**'
 asarUnpack:
   - resources/**
-win:
-  executableName: sketchbook
-nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
-mac:
-  entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
-linux:
-  target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
-appImage:
-  artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
+# License texts ship in Sketchbook.app/Contents/Resources.
+extraResources:
+  - from: LICENSE
+    to: LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+  category: public.app-category.graphics-design
+  icon: build/icon.icns
+  # Ad-hoc signature: Apple Silicon refuses to launch completely unsigned apps
+  # ("is damaged"). Not notarized, so first launch needs "Open Anyway".
+  identity: '-'
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+  darkModeSupport: true
+  minimumSystemVersion: '12.0'
+  # Declare the .excalidraw content type (extension + MIME) so Finder/Launch
+  # Services know what it is. Electron's stock Info.plist still carries generic
+  # camera/mic/bluetooth usage strings; they never prompt unless requested.
+  extendInfo:
+    UTImportedTypeDeclarations:
+      - UTTypeIdentifier: com.excalidraw.drawing
+        UTTypeDescription: Excalidraw Drawing
+        UTTypeConformsTo:
+          - public.json
+          - public.data
+        UTTypeTagSpecification:
+          public.filename-extension:
+            - excalidraw
+          public.mime-type:
+            - application/vnd.excalidraw+json
+
+fileAssociations:
+  - ext: excalidraw
+    name: Excalidraw Drawing
+    description: Excalidraw Drawing
+    role: Editor
+    rank: Owner
+    mimeType: application/vnd.excalidraw+json
+    icon: build/icon.icns
+
+dmg:
+  artifactName: Sketchbook-${version}-arm64.${ext}
+  title: Sketchbook ${version}
