@@ -1,13 +1,22 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sketchbook</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!--
+      Production CSP. Everything is served from app://bundle; no network.
+      'wasm-unsafe-eval' only permits compiling WebAssembly (Excalidraw's font
+      subsetting for export uses HarfBuzz/woff2 wasm); JS eval stays blocked.
+      In `electron-vite dev` a relaxed policy is swapped in by the
+      `sketchbook-dev-csp` plugin in electron.vite.config.ts.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'"
     />
+    <!-- Must run before the app bundle: sets EXCALIDRAW_ASSET_PATH, hides File System Access API. -->
+    <script src="./boot.js"></script>
   </head>
 
   <body>
