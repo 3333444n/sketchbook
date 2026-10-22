@@ -125,3 +125,88 @@ test('files from argv open as tabs; closing one leaves the other', async () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('double-clicking a tab renames the file on disk', async () => {
+  const dir = makeTempDir('sketchbook-rename-')
+  const from = join(dir, 'draft.excalidraw')
+  const taken = join(dir, 'taken.excalidraw')
+  const to = join(dir, 'Final plan.excalidraw')
+  writeFileSync(from, sceneJSON('Draft'))
+  writeFileSync(taken, sceneJSON('Taken'))
+  const launched = await launchApp({ args: [from], reload: false })
+  const { app, page } = launched
+  try {
+    await waitForExcalidraw(page)
+    await expect.poll(() => tabTitles(page), { timeout: 10_000 }).toEqual(['draft'])
+
+    const rename = async (name: string, key = 'Enter'): Promise<void> => {
+      await page.locator('.sketchbook-tab__title', { hasText: /./ }).first().dblclick()
+      const input = page.locator('.sketchbook-tab__rename')
+      await expect(input).toBeFocused()
+      await input.fill(name)
+      await input.press(key)
+    }
+
+    // Escape cancels.
+    await rename('Nope', 'Escape')
+    await expect.poll(() => tabTitles(page)).toEqual(['draft'])
+    expect(existsSync(from)).toBe(true)
+
+    // A name that is already taken is refused (main shows a warning).
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = (async () => ({
+        response: 0,
+        checkboxChecked: false
+      })) as typeof dialog.showMessageBox
+    })
+    await rename('taken')
+    await expect.poll(() => tabTitles(page)).toEqual(['draft'])
+    expect(existsSync(from)).toBe(true)
+    expect(JSON.parse(readFileSync(taken, 'utf8')).elements[0].text).toBe('Taken')
+
+    // Enter renames the file in place.
+    await rename('Final plan')
+    await expect.poll(() => tabTitles(page), { timeout: 10_000 }).toEqual(['Final plan'])
+    expect(existsSync(from)).toBe(false)
+    expect(JSON.parse(readFileSync(to, 'utf8')).elements[0].text).toBe('Draft')
+    await expect
+      .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle()))
+      .toBe('Final plan')
+  } finally {
+    await launched.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('renaming an untitled tab sets its title and default save name', async () => {
+  const dir = makeTempDir('sketchbook-rename-untitled-')
+  const launched = await launchApp()
+  const { app, page } = launched
+  try {
+    await waitForExcalidraw(page)
+    await page.locator('.sketchbook-tab__title').first().dblclick()
+    await page.locator('.sketchbook-tab__rename').fill('Trip ideas')
+    await page.locator('.sketchbook-tab__rename').press('Enter')
+    await expect.poll(() => tabTitles(page)).toEqual(['Trip ideas'])
+
+    // The Save dialog proposes the new name.
+    const defaultPath = app.evaluate(
+      ({ dialog }) =>
+        new Promise<string>((resolve) => {
+          dialog.showSaveDialog = (async (...args: unknown[]) => {
+            const opts = args.at(-1) as { defaultPath?: string }
+            resolve(opts.defaultPath ?? '')
+            return { canceled: true, filePath: '' }
+          }) as typeof dialog.showSaveDialog
+        })
+    )
+    await drawText(page, 'Hello')
+    await app.evaluate(({ BrowserWindow }, channel) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(channel, 'save')
+    }, IPC.menu)
+    expect(await defaultPath).toMatch(/\/Trip ideas\.excalidraw$/)
+  } finally {
+    await launched.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

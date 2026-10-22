@@ -51,6 +51,8 @@ function onLinkOpen(
 type BodyProps = {
   doc: DocPayload
   init: EditorInit | undefined
+  /** The tab's display name (default file name for image exports). */
+  name: string
   /** Only read at mount (focus on open). */
   autoFocus: boolean
   theme: Theme
@@ -63,6 +65,7 @@ type BodyProps = {
 const EditorBody = memo(function EditorBody({
   doc,
   init,
+  name,
   autoFocus,
   theme,
   themePreference,
@@ -137,7 +140,7 @@ const EditorBody = memo(function EditorBody({
       onChange={onChange}
       onLibraryChange={onLibraryChange}
       onLinkOpen={onLinkOpen}
-      name={editor.name}
+      name={name}
       theme={theme}
       autoFocus={autoFocus}
       aiEnabled={false}

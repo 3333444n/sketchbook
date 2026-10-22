@@ -11,6 +11,8 @@ export type DocState = {
   /** webContents.id of the window hosting this doc. */
   winId: number
   path: string | null
+  /** Custom name for an untitled doc (from rename); ignored once it has a path. */
+  title: string | null
   dirty: boolean
   empty: boolean
   /** User chose "Save" in a window-close/quit prompt; the close waits on this save. */
@@ -67,6 +69,7 @@ export class Registry<W> {
       docId: payload.docId,
       winId,
       path: payload.path,
+      title: payload.title ?? null,
       dirty: !!opts?.dirty,
       empty: payload.contents === null,
       pendingClose: false,
@@ -139,7 +142,7 @@ export class Registry<W> {
   chrome(winId: number): Chrome {
     const active = this.activeDoc(winId)
     return {
-      title: windowTitle(active?.path ?? null, !!active?.dirty),
+      title: windowTitle(active?.path ?? null, !!active?.dirty, active?.title),
       representedFilename: active?.path ?? '',
       documentEdited: this.anyDirty(winId)
     }

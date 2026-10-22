@@ -20,6 +20,8 @@ export type DocPayload = {
   contents: string | null
   /** True when restored from the recovery journal after a crash. */
   recovered?: boolean
+  /** Name given to an untitled doc via rename (also the default Save name). */
+  title?: string
 }
 
 /** Actions the native menu sends to the window; they apply to the active tab. */
@@ -36,6 +38,12 @@ export type MenuAction =
   | 'prev-tab'
 
 export type SaveResult = { path: string } | null
+
+/**
+ * Result of renaming a doc: its (possibly new) path and display title.
+ * null if the name was invalid or the rename failed (main already told the user).
+ */
+export type RenameResult = { path: string | null; title: string } | null
 
 /**
  * Result of asking main to close a tab:
@@ -99,6 +107,11 @@ export interface SketchbookAPI {
   setEmpty(docId: string, empty: boolean): void
   /** Write the current scene to the crash-recovery journal (renderer debounces). */
   autosave(docId: string, contents: string): void
+  /**
+   * Rename the doc. Saved docs: the file on disk is renamed (same folder and
+   * extension). Untitled docs: the name becomes the tab title and default Save name.
+   */
+  renameDoc(docId: string, name: string): Promise<RenameResult>
   /** Ask main whether this tab may close (main shows the save prompt if dirty). */
   requestCloseDoc(docId: string): Promise<CloseDecision>
   /**
@@ -125,6 +138,7 @@ export const IPC = {
   setDirty: 'doc:set-dirty',
   setEmpty: 'doc:set-empty',
   autosave: 'doc:autosave',
+  renameDoc: 'doc:rename',
   requestCloseDoc: 'doc:request-close',
   docClosed: 'doc:closed'
 } as const

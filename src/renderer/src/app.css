@@ -206,6 +206,21 @@ body,
   font-weight: 500;
 }
 
+.sketchbook-tab__rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--color-primary, #6965db);
+  border-radius: 4px;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
 .sketchbook-tab__close {
   flex: 0 0 auto;
   display: grid;

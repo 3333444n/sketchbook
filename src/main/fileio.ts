@@ -62,8 +62,34 @@ export function displayName(filePath: string | null): string {
   return e ? b.slice(0, -e.length) : b
 }
 
-export function windowTitle(filePath: string | null, dirty: boolean): string {
-  return displayName(filePath) + (dirty ? ' — Edited' : '')
+/** Window/tab title: the file's name, else a custom untitled name, else "Untitled". */
+export function docTitle(filePath: string | null, title?: string | null): string {
+  return filePath ? displayName(filePath) : title || 'Untitled'
+}
+
+export function windowTitle(
+  filePath: string | null,
+  dirty: boolean,
+  title?: string | null
+): string {
+  return docTitle(filePath, title) + (dirty ? ' — Edited' : '')
+}
+
+/**
+ * Clean a user-typed document name for use as a file name (without extension).
+ * Strips path separators, colons, control characters and surrounding dots/space.
+ * Returns null if nothing usable is left.
+ */
+export function sanitizeFileName(name: string): string | null {
+  const cleaned = name
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+|\.+$/g, '')
+    .trim()
+    .slice(0, 200)
+  return cleaned ? cleaned : null
 }
 
 /**

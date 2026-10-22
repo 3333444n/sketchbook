@@ -28,6 +28,7 @@ const api: SketchbookAPI = {
   setDirty: (docId, dirty) => ipcRenderer.send(IPC.setDirty, docId, !!dirty),
   setEmpty: (docId, empty) => ipcRenderer.send(IPC.setEmpty, docId, !!empty),
   autosave: (docId, contents) => ipcRenderer.send(IPC.autosave, docId, contents),
+  renameDoc: (docId, name) => ipcRenderer.invoke(IPC.renameDoc, docId, name),
   requestCloseDoc: (docId) => ipcRenderer.invoke(IPC.requestCloseDoc, docId),
   docClosed: (docId) => ipcRenderer.send(IPC.docClosed, docId)
 }

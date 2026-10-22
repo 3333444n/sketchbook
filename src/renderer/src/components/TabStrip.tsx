@@ -29,6 +29,8 @@ type Props = {
   onClose: (docId: string) => void
   onNewTab: () => void
   onReorder: (docId: string, targetId: string, after: boolean) => void
+  /** Double-click a tab title to rename the drawing. */
+  onRename: (docId: string, name: string) => void
   /** Return keyboard focus to the active editor after a click in the strip. */
   onRefocus: () => void
 }
@@ -45,11 +47,31 @@ export const TabStrip = memo(function TabStrip({
   onClose,
   onNewTab,
   onReorder,
+  onRename,
   onRefocus
 }: Props): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<{ id: string; after: boolean } | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  // The edit being finished; guards against the blur fired when the input unmounts
+  // (after Enter/Escape) committing a second time.
+  const finishing = useRef<string | null>(null)
+
+  const startRename = (docId: string): void => {
+    finishing.current = null
+    setEditingId(docId)
+  }
+
+  const finishRename = (docId: string, value: string | null): void => {
+    if (finishing.current === docId) return
+    finishing.current = docId
+    setEditingId(null)
+    const tab = tabs.find((t) => t.docId === docId)
+    const name = value?.trim()
+    if (tab && name && name !== tab.title) onRename(docId, name)
+    onRefocus()
+  }
 
   // Keep the active tab visible when it changes or the tab set changes.
   useEffect(() => {
@@ -115,6 +137,7 @@ export const TabStrip = memo(function TabStrip({
         {tabs.map((tab) => {
           const active = tab.docId === activeId
           const hint = dropHint?.id === tab.docId ? dropHint : null
+          const editing = editingId === tab.docId
           return (
             <div
               key={tab.docId}
@@ -122,13 +145,14 @@ export const TabStrip = memo(function TabStrip({
               role="tab"
               aria-selected={active}
               title={tab.tooltip}
-              draggable
+              draggable={!editing}
               className={[
                 'sketchbook-tab',
                 active && 'sketchbook-tab--active',
                 tab.dirty && 'sketchbook-tab--dirty',
                 dragId === tab.docId && 'sketchbook-tab--dragging',
-                hint && (hint.after ? 'sketchbook-tab--drop-after' : 'sketchbook-tab--drop-before')
+                hint && (hint.after ? 'sketchbook-tab--drop-after' : 'sketchbook-tab--drop-before'),
+                editing && 'sketchbook-tab--editing'
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -138,7 +162,7 @@ export const TabStrip = memo(function TabStrip({
                 if (e.button === 1) e.preventDefault()
               }}
               onMouseUp={(e) => {
-                if (e.button === 0) onRefocus()
+                if (e.button === 0 && !editing) onRefocus()
               }}
               onAuxClick={(e) => {
                 if (e.button === 1) {
@@ -172,7 +196,35 @@ export const TabStrip = memo(function TabStrip({
               }}
               onDragEnd={endDrag}
             >
-              <span className="sketchbook-tab__title">{tab.title}</span>
+              {editing ? (
+                <input
+                  className="sketchbook-tab__rename"
+                  aria-label="Rename drawing"
+                  defaultValue={tab.title}
+                  autoFocus
+                  spellCheck={false}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseUp={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    // Keep typing out of Excalidraw's and the app's shortcut handlers.
+                    e.stopPropagation()
+                    if (e.key === 'Enter') finishRename(tab.docId, e.currentTarget.value)
+                    else if (e.key === 'Escape') finishRename(tab.docId, null)
+                  }}
+                  onBlur={(e) => finishRename(tab.docId, e.currentTarget.value)}
+                />
+              ) : (
+                <span
+                  className="sketchbook-tab__title"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    startRename(tab.docId)
+                  }}
+                >
+                  {tab.title}
+                </span>
+              )}
               <button
                 type="button"
                 className="sketchbook-tab__close"

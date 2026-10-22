@@ -49,6 +49,8 @@ type Tab = {
   /** Current path on disk (updated on save). */
   path: string | null
   dirty: boolean
+  /** Name given to an untitled doc via rename (the path wins once saved). */
+  title: string | null
   /** "Untitled N" numbering, assigned when the tab is created. */
   untitled: number
   background: string
@@ -80,13 +82,16 @@ function newTab(doc: DocPayload, tabs: Tab[]): Tab {
     load: 1,
     path: doc.path,
     dirty: !!doc.recovered,
+    title: doc.title ?? null,
     untitled: doc.path ? 0 : nextUntitled(tabs),
     background: DEFAULT_BACKGROUND
   }
 }
 
 function tabTitle(tab: Tab): string {
-  return docName(tab.path) ?? (tab.untitled > 1 ? `Untitled ${tab.untitled}` : 'Untitled')
+  return (
+    docName(tab.path) ?? tab.title ?? (tab.untitled > 1 ? `Untitled ${tab.untitled}` : 'Untitled')
+  )
 }
 
 const emptyScene = (): string => serializeAsJSON([], {}, {}, 'local')
@@ -395,6 +400,30 @@ function App(): React.JSX.Element {
     [commit]
   )
   const onCloseTab = useCallback((docId: string) => void closeTab(docId), [closeTab])
+
+  /** Rename from the tab strip: main renames the file (or titles an untitled doc). */
+  const renameTab = useCallback(
+    async (docId: string, name: string) => {
+      try {
+        const result = await bridge.renameDoc(docId, name)
+        if (!result) return
+        updateTab(docId, (t) => ({
+          ...t,
+          path: result.path,
+          // `doc` is left alone: it is only read when an editor (re)mounts, and
+          // remounts are built from `path`/`title` (see evict/snapshot).
+          title: result.path ? null : result.title
+        }))
+      } catch (err) {
+        console.error('Rename failed', err)
+      }
+    },
+    [updateTab]
+  )
+  const onRenameTab = useCallback(
+    (docId: string, name: string) => void renameTab(docId, name),
+    [renameTab]
+  )
   const onRefocus = useCallback(() => void focusActive(), [focusActive])
 
   const tabInfos = useMemo<TabInfo[]>(
@@ -427,6 +456,7 @@ function App(): React.JSX.Element {
         onClose={onCloseTab}
         onNewTab={bridge.newTab}
         onReorder={reorder}
+        onRename={onRenameTab}
         onRefocus={onRefocus}
       />
       <div className="sketchbook-editors" style={{ top: TAB_STRIP_HEIGHT }}>
@@ -435,6 +465,7 @@ function App(): React.JSX.Element {
             key={`${tab.docId}:${tab.load}`}
             doc={tab.doc}
             init={tab.init}
+            name={tabTitle(tab)}
             active={tab.docId === activeId}
             theme={theme}
             themePreference={preference}

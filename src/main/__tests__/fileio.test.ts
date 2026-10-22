@@ -5,9 +5,11 @@ import { join } from 'path'
 import {
   atomicWrite,
   displayName,
+  docTitle,
   ensureExtension,
   isNativeScene,
   readDocContents,
+  sanitizeFileName,
   windowTitle
 } from '../fileio'
 
@@ -71,5 +73,29 @@ describe('readDocContents', () => {
     const svg = join(dir, 'x.svg')
     writeFileSync(svg, '<svg/>')
     expect(await readDocContents(svg)).toBe('<svg/>')
+  })
+})
+
+describe('sanitizeFileName', () => {
+  it('keeps ordinary names', () => {
+    expect(sanitizeFileName('Trip ideas')).toBe('Trip ideas')
+  })
+  it('strips path separators, colons and control characters', () => {
+    expect(sanitizeFileName('a/b\\c:d\u0007e')).toBe('abcde')
+  })
+  it('trims whitespace and surrounding dots', () => {
+    expect(sanitizeFileName('  ..hidden name..  ')).toBe('hidden name')
+  })
+  it('rejects names with nothing usable left', () => {
+    expect(sanitizeFileName('   ')).toBeNull()
+    expect(sanitizeFileName('../')).toBeNull()
+  })
+})
+
+describe('docTitle', () => {
+  it('prefers the file name, then a custom title, then Untitled', () => {
+    expect(docTitle('/x/Notes.excalidraw', 'Ignored')).toBe('Notes')
+    expect(docTitle(null, 'Ideas')).toBe('Ideas')
+    expect(docTitle(null, null)).toBe('Untitled')
   })
 })

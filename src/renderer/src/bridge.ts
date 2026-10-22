@@ -6,6 +6,7 @@ import type {
   DocPayload,
   InitialState,
   MenuAction,
+  RenameResult,
   SaveResult
 } from '../../shared/ipc'
 
@@ -35,6 +36,7 @@ export const bridge = {
   setDirty: (docId: string, dirty: boolean): void => api().setDirty(docId, dirty),
   setEmpty: (docId: string, empty: boolean): void => api().setEmpty(docId, empty),
   autosave: (docId: string, contents: string): void => api().autosave(docId, contents),
+  renameDoc: (docId: string, name: string): Promise<RenameResult> => api().renameDoc(docId, name),
   requestCloseDoc: (docId: string): Promise<CloseDecision> => api().requestCloseDoc(docId),
   docClosed: (docId: string): void => api().docClosed(docId)
 }

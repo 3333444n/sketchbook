@@ -14,7 +14,8 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
-import { basename, dirname, join } from 'path'
+import { promises as fs } from 'fs'
+import { basename, dirname, extname, join } from 'path'
 import { randomUUID } from 'crypto'
 import {
   IPC,
@@ -22,6 +23,7 @@ import {
   type DocPayload,
   type InitialState,
   type MenuAction,
+  type RenameResult,
   type SaveResult
 } from '../shared/ipc'
 import { TRAFFIC_LIGHT_POSITION } from '../shared/chrome'
@@ -29,10 +31,12 @@ import { isAppUrl, loadRenderer } from './protocol'
 import {
   atomicWrite,
   displayName,
+  docTitle,
   ensureExtension,
   isNativeScene,
   OPENABLE_EXTENSIONS,
   readDocContents,
+  sanitizeFileName,
   SCENE_EXTENSION
 } from './fileio'
 import { deleteJournal, scanJournals, writeJournal } from './recovery'
@@ -259,7 +263,7 @@ function showSavePrompt(win: BrowserWindow, d: DocState): Promise<number> {
       buttons: ['Save', "Don't Save", 'Cancel'],
       defaultId: 0,
       cancelId: 2,
-      message: `Do you want to save the changes you made to "${displayName(d.path)}"?`,
+      message: `Do you want to save the changes you made to "${docTitle(d.path, d.title)}"?`,
       detail: "Your changes will be lost if you don't save them."
     })
     .then((r) => r.response)
@@ -446,7 +450,7 @@ async function handleSave(
   } else {
     const defaultPath = d.path
       ? join(dirname(d.path), displayName(d.path) + SCENE_EXTENSION)
-      : join(app.getPath('documents'), 'Untitled' + SCENE_EXTENSION)
+      : join(app.getPath('documents'), docTitle(null, d.title) + SCENE_EXTENSION)
     const opts: Electron.SaveDialogOptions = {
       defaultPath,
       filters: [{ name: 'Excalidraw', extensions: ['excalidraw'] }],
@@ -474,6 +478,7 @@ async function handleSave(
   }
 
   d.path = target
+  d.title = null
   d.dirty = false
   d.empty = false
   d.payload = { docId: d.docId, path: target, contents }
@@ -484,6 +489,69 @@ async function handleSave(
   // Continue a window-close/quit that was waiting on this save.
   if (d.pendingClose) resolveSaveWaiter(d, true)
   return { path: target }
+}
+
+// ---------------------------------------------------------------------------
+// Rename
+
+/**
+ * Rename a doc. A saved doc's file is renamed in place (same folder, same
+ * extension, never overwriting another file); an untitled doc just gets a title.
+ */
+async function handleRename(
+  w: WinState<BrowserWindow>,
+  d: DocState,
+  rawName: string
+): Promise<RenameResult> {
+  const name = sanitizeFileName(rawName)
+  if (!name) return null
+
+  if (!d.path) {
+    d.title = name
+    d.payload = { ...d.payload, title: name }
+    updateWindowChrome(w.id)
+    return { path: null, title: name }
+  }
+
+  const from = d.path
+  const to = join(dirname(from), name + extname(from))
+  if (to === from) return { path: from, title: displayName(from) }
+
+  // A case-only change (e.g. "notes" → "Notes") is the same file on macOS.
+  const sameFile = to.toLowerCase() === from.toLowerCase()
+  const taken =
+    !sameFile &&
+    (await fs.access(to).then(
+      () => true,
+      () => false
+    ))
+  const parent = w.win.isDestroyed() ? undefined : w.win
+  if (taken || reg.findByPath(to)) {
+    const opts = {
+      type: 'warning' as const,
+      message: `"${basename(to)}" already exists.`,
+      detail: 'Please choose a different name.'
+    }
+    if (parent) await dialog.showMessageBox(parent, opts)
+    else await dialog.showMessageBox(opts)
+    return null
+  }
+
+  try {
+    await fs.rename(from, to)
+  } catch (err) {
+    dialog.showErrorBox(
+      'Could not rename',
+      `"${basename(from)}" could not be renamed.\n\n${(err as Error).message}`
+    )
+    return null
+  }
+
+  d.path = to
+  d.payload = { ...d.payload, path: to }
+  app.addRecentDocument(to)
+  updateWindowChrome(w.id)
+  return { path: to, title: displayName(to) }
 }
 
 // ---------------------------------------------------------------------------
@@ -550,6 +618,13 @@ function registerIpc(): void {
       return handleSave(w, d, contents, saveAs)
     }
   )
+
+  ipcMain.handle(IPC.renameDoc, (e: IpcMainInvokeEvent, docId: unknown, name: unknown) => {
+    const w = reg.windows.get(e.sender.id)
+    const d = w && reg.docOf(w.id, docId)
+    if (!w || !d || typeof name !== 'string') return null
+    return handleRename(w, d, name)
+  })
 
   ipcMain.handle(
     IPC.requestCloseDoc,
