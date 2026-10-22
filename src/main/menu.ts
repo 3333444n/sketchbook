@@ -1,7 +1,15 @@
 // Track A: native application menu.
-import { app, Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { newUntitledWindow, sendMenuToFocused, showOpenDialog } from './documents'
+import { newTab, newUntitledWindow, sendMenuToFocused, showOpenDialog } from './documents'
+
+/**
+ * Electron gives each menu item a single accelerator, so alternates are hidden
+ * duplicates that still fire.
+ */
+function hiddenAlias(accelerator: string, click: () => void): MenuItemConstructorOptions {
+  return { label: accelerator, accelerator, visible: false, acceleratorWorksWhenHidden: true, click }
+}
 
 export function buildMenu(): void {
   app.setAboutPanelOptions({
@@ -10,12 +18,16 @@ export function buildMenu(): void {
     credits: 'Built with Excalidraw (MIT License) — https://github.com/excalidraw/excalidraw'
   })
 
+  const nextTab = (): void => sendMenuToFocused('next-tab')
+  const prevTab = (): void => sendMenuToFocused('prev-tab')
+
   const template: MenuItemConstructorOptions[] = [
     { role: 'appMenu' },
     {
       label: 'File',
       submenu: [
-        { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => newUntitledWindow() },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => newTab() },
+        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => newUntitledWindow() },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => void showOpenDialog() },
         {
           label: 'Open Recent',
@@ -35,7 +47,17 @@ export function buildMenu(): void {
           click: () => sendMenuToFocused('export-image')
         },
         { type: 'separator' },
-        { role: 'close' }
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => sendMenuToFocused('close-tab')
+        },
+        {
+          label: 'Close Window',
+          accelerator: 'Shift+CmdOrCtrl+W',
+          // close() (not destroy) so the unsaved-changes flow runs.
+          click: () => BrowserWindow.getFocusedWindow()?.close()
+        }
       ]
     },
     {
@@ -69,7 +91,22 @@ export function buildMenu(): void {
         { role: 'togglefullscreen' }
       ]
     },
-    { role: 'windowMenu' },
+    {
+      // role 'window' keeps macOS's automatic list of open windows.
+      label: 'Window',
+      role: 'window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { label: 'Show Next Tab', accelerator: 'Ctrl+Tab', click: nextTab },
+        { label: 'Show Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: prevTab },
+        hiddenAlias('Shift+CmdOrCtrl+]', nextTab),
+        hiddenAlias('Shift+CmdOrCtrl+[', prevTab),
+        { type: 'separator' },
+        { role: 'front' }
+      ]
+    },
     {
       role: 'help',
       submenu: [
