@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an improvement to Sketchbook
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sketchbook is offline by design. Features that need a network (collaboration, share links, AI, online library browsing) are out of scope.
+        Drawing-tool features (new shapes, tools) belong upstream at [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw/issues).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Sketchbook to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This works without a network connection.
+          required: true
+        - label: I searched existing issues for this request.
+          required: true
