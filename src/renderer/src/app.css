@@ -43,7 +43,8 @@ body,
   --tab-text-muted: #5c5c5c;
   --tab-hover-bg: rgba(0, 0, 0, 0.05);
   --tab-active-bg: #ffffff;
-  --tab-active-shadow: 0 0 0.93px 0 rgba(0, 0, 0, 0.17), 0 0 3.13px 0 rgba(0, 0, 0, 0.08),
+  --tab-active-shadow:
+    0 0 0.93px 0 rgba(0, 0, 0, 0.17), 0 0 3.13px 0 rgba(0, 0, 0, 0.08),
     0 3px 7px 0 rgba(0, 0, 0, 0.05);
   --tab-dot: #6965db;
   --tab-close-hover-bg: rgba(0, 0, 0, 0.08);
@@ -60,8 +61,16 @@ body,
   align-items: center;
   gap: 2px;
   padding-right: 8px;
-  font-family: Assistant, system-ui, BlinkMacSystemFont, -apple-system, 'Segoe UI', Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family:
+    Assistant,
+    system-ui,
+    BlinkMacSystemFont,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
   font-size: 13px;
   color: var(--tab-text);
   user-select: none;

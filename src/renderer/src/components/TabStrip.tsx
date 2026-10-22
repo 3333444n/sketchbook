@@ -195,7 +195,12 @@ export const TabStrip = memo(function TabStrip({
         onClick={onNewTab}
       >
         <svg viewBox="0 0 16 16" aria-hidden>
-          <path d="M8 3.5v9m-4.5-4.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path
+            d="M8 3.5v9m-4.5-4.5h9"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
         </svg>
       </button>
       <div className="sketchbook-tabstrip__drag" />

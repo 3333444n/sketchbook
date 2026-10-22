@@ -8,7 +8,7 @@
 // preventDefault), so Electron still treats the key as unhandled and fires the
 // menu accelerator.
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 
 const MENU_OWNED_KEYS = new Set(['s', 'o', 'n', 't', 'w'])
 
@@ -28,12 +28,12 @@ export function useMenuOwnedShortcuts(): void {
 }
 
 /**
+ * Pass stable callbacks (useCallback).
+ *
  * ⌘1–⌘8 select tab N, ⌘9 the last tab (Chrome/Safari behaviour). Swallowed
  * entirely so Excalidraw never sees them.
  */
 export function useTabNumberShortcuts(select: (index: number | 'last') => void): void {
-  const selectRef = useRef(select)
-  selectRef.current = select
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!hasCmd(event) || event.altKey || event.shiftKey) return
@@ -43,11 +43,11 @@ export function useTabNumberShortcuts(select: (index: number | 'last') => void):
       event.stopImmediatePropagation()
       if (event.repeat) return
       const n = Number(match[1])
-      selectRef.current(n === 9 ? 'last' : n - 1)
+      select(n === 9 ? 'last' : n - 1)
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [])
+  }, [select])
 }
 
 /**
@@ -57,14 +57,12 @@ export function useTabNumberShortcuts(select: (index: number | 'last') => void):
  * working, but only ever for the active tab.
  */
 export function useForwardStrayKeys(focusActive: () => HTMLElement | null): void {
-  const focusRef = useRef(focusActive)
-  focusRef.current = focusActive
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       const current = document.activeElement
       if (current && current !== document.body) return
       if (!event.isTrusted) return
-      const target = focusRef.current()
+      const target = focusActive()
       if (!target || target === document.body) return
       event.stopImmediatePropagation()
       target.dispatchEvent(
@@ -85,7 +83,7 @@ export function useForwardStrayKeys(focusActive: () => HTMLElement | null): void
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
+  }, [focusActive])
 }
 
 /** Format "CtrlOrCmd+Shift+S" the way Excalidraw's own menu items do. */

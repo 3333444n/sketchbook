@@ -166,7 +166,10 @@ function App(): React.JSX.Element {
           tabs = tabs.map((t) =>
             t.docId === doc.docId
               ? {
-                  ...newTab(doc, tabs.filter((o) => o.docId !== doc.docId)),
+                  ...newTab(
+                    doc,
+                    tabs.filter((o) => o.docId !== doc.docId)
+                  ),
                   load: t.load + 1
                 }
               : t
@@ -287,7 +290,8 @@ function App(): React.JSX.Element {
       },
       onDirtyChange: (docId, dirty) =>
         updateTab(docId, (t) => (t.dirty === dirty ? t : { ...t, dirty })),
-      onPathChange: (docId, path) => updateTab(docId, (t) => (t.path === path ? t : { ...t, path })),
+      onPathChange: (docId, path) =>
+        updateTab(docId, (t) => (t.path === path ? t : { ...t, path })),
       onBackgroundChange: (docId, color) =>
         updateTab(docId, (t) => (t.background === color ? t : { ...t, background: color })),
       onLibraryChange,
@@ -358,11 +362,15 @@ function App(): React.JSX.Element {
   // ---- keyboard ---------------------------------------------------------------
 
   useMenuOwnedShortcuts()
-  useTabNumberShortcuts((index) => {
-    const { tabs } = modelRef.current
-    const tab = index === 'last' ? tabs.at(-1) : tabs[index]
-    if (tab) activate(tab.docId)
-  })
+  const selectTabNumber = useCallback(
+    (index: number | 'last') => {
+      const { tabs } = modelRef.current
+      const tab = index === 'last' ? tabs.at(-1) : tabs[index]
+      if (tab) activate(tab.docId)
+    },
+    [activate]
+  )
+  useTabNumberShortcuts(selectTabNumber)
   const focusActive = useCallback((): HTMLElement | null => {
     const id = modelRef.current.activeId
     if (!id) return null
