@@ -29,7 +29,8 @@ the network: no accounts, no sync, no telemetry.
   request block and an end-to-end test.
 - **Real `.excalidraw` files** with native Open and Save dialogs, Finder double-click, and
   Open Recent.
-- **Tabs and multiple windows.** Drag tabs to reorder them; ⌘N opens another window.
+- **Tabs and multiple windows.** Drag tabs to reorder them, double-click a tab to rename the
+  drawing, and press ⌘N for another window.
 - **Crash recovery.** Unsaved changes are journaled and come back as dirty tabs after a crash.
   Your file only changes when you save.
 - **PNG and SVG export** with the scene embedded, so an exported image opens again as an
@@ -55,27 +56,58 @@ The screenshots are generated from the production build with `pnpm screenshots`.
 
 ## Install
 
-Sketchbook runs on macOS 12 or later on Apple Silicon.
+You need a Mac with Apple Silicon (an M1, M2, M3, M4 or newer chip) running macOS 12 or later.
+Not sure? Click the Apple menu → **About This Mac** and look at **Chip**.
 
-1. Download `Sketchbook-<version>-arm64.dmg` from
-   [Releases](https://github.com/3333444n/sketchbook/releases).
-2. Open it and drag **Sketchbook** into **Applications**.
+1. Go to the [latest release](https://github.com/3333444n/sketchbook/releases/latest) and
+   click **`Sketchbook-<version>-arm64.dmg`** under **Assets** to download it.
+2. Open the downloaded file (it is in your **Downloads** folder). A window appears.
+3. Drag the **Sketchbook** icon onto the **Applications** folder in that window.
+4. You can now eject the installer: in Finder's sidebar, click the ⏏ next to **Sketchbook**.
 
-### First launch
+### Opening it the first time
 
-The app is ad-hoc signed but not notarized by Apple, so macOS blocks the first launch
-("Apple could not verify…"). Either:
+Sketchbook is free and open source, but it isn't registered with Apple (that costs a yearly
+fee), so the first time you open it macOS warns that it can't verify the app. This only
+happens once:
 
-- try to open it once, then go to **System Settings → Privacy & Security**, scroll to
-  **Security** and click **Open Anyway** next to the Sketchbook message, or
-- run this in Terminal:
+1. Open **Applications** and double-click **Sketchbook**. macOS shows a warning; click
+   **Done** (or **OK**).
+2. Open the Apple menu → **System Settings** → **Privacy & Security**.
+3. Scroll down to **Security**. Next to the message about Sketchbook, click **Open Anyway**,
+   then confirm with your password or Touch ID.
+4. Sketchbook opens. From now on it opens like any other app.
 
-  ```sh
-  xattr -cr /Applications/Sketchbook.app
-  ```
+<details>
+<summary>Prefer the Terminal?</summary>
 
-After that it opens normally. On macOS 15 and later, Control-click → Open no longer bypasses
-this check.
+This does the same as steps 1–3:
+
+```sh
+xattr -cr /Applications/Sketchbook.app
+```
+
+</details>
+
+### Getting started
+
+- **Draw** with the toolbar at the top, just like excalidraw.com. Press `?` to see every
+  shortcut.
+- **Save** with ⌘S. Drawings are ordinary `.excalidraw` files, saved wherever you choose (your
+  **Documents** folder by default). Double-click one in Finder to open it in Sketchbook.
+- **Tabs:** ⌘T opens a new tab. **Double-click a tab's name to rename the drawing**; if it's
+  already saved, the file on your Mac is renamed too.
+- **Export a picture** with ⇧⌘E (PNG or SVG). Exports keep the drawing inside them, so you
+  can open an exported image in Sketchbook and keep editing.
+- **Nothing gets lost:** if your Mac or the app crashes, your unsaved drawings come back as
+  tabs the next time you open Sketchbook.
+- **No internet needed.** Sketchbook never connects to the network.
+
+### Uninstall
+
+Drag **Sketchbook** from **Applications** to the Trash. Your drawings stay where you saved
+them. To also remove settings and crash-recovery data, delete
+`~/Library/Application Support/sketchbook`.
 
 ## Build from source
 
@@ -95,18 +127,19 @@ More in [docs/building-and-releasing.md](docs/building-and-releasing.md).
 
 ## Keyboard shortcuts
 
-| Shortcut     | Action                                 |
-| ------------ | -------------------------------------- |
-| ⌘T           | New tab                                |
-| ⌘N           | New window                             |
-| ⌘O           | Open                                   |
-| ⌘S           | Save                                   |
-| ⇧⌘S          | Save As                                |
-| ⇧⌘E          | Export image                           |
-| ⌘W           | Close tab                              |
-| ⇧⌘W          | Close window                           |
-| ⌘1–⌘9        | Go to tab 1–8; ⌘9 goes to the last tab |
-| ⌃Tab / ⌃⇧Tab | Next / previous tab (also ⇧⌘] / ⇧⌘[)   |
+| Shortcut           | Action                                 |
+| ------------------ | -------------------------------------- |
+| ⌘T                 | New tab                                |
+| ⌘N                 | New window                             |
+| ⌘O                 | Open                                   |
+| ⌘S                 | Save                                   |
+| ⇧⌘S                | Save As                                |
+| ⇧⌘E                | Export image                           |
+| ⌘W                 | Close tab                              |
+| ⇧⌘W                | Close window                           |
+| ⌘1–⌘9              | Go to tab 1–8; ⌘9 goes to the last tab |
+| ⌃Tab / ⌃⇧Tab       | Next / previous tab (also ⇧⌘] / ⇧⌘[)   |
+| Double-click a tab | Rename the drawing                     |
 
 All of Excalidraw's shortcuts work too (press `?` in the app for the full list).
 

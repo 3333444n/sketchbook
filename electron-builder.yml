@@ -1,6 +1,6 @@
 appId: com.sketchbook.app
 productName: Sketchbook
-copyright: Copyright © 2026 kickeortiz
+copyright: Copyright © 2026 Luis Peregrino
 directories:
   buildResources: build
   output: dist

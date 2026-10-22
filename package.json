@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Sketchbook — an offline desktop whiteboard built with Excalidraw",
   "main": "./out/main/index.js",
-  "author": "kickeortiz",
+  "author": "Luis Peregrino (https://github.com/3333444n)",
   "license": "MIT",
   "homepage": "https://github.com/3333444n/sketchbook#readme",
   "repository": {
