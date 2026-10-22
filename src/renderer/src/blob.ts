@@ -23,7 +23,8 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export function contentsToBlob(contents: string): Blob {
   if (contents.startsWith('data:')) return dataUrlToBlob(contents)
   const head = contents.trimStart().slice(0, 512)
-  const looksLikeSvg = head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'))
+  const looksLikeSvg =
+    head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'))
   return new Blob([contents], { type: looksLikeSvg ? 'image/svg+xml' : 'application/json' })
 }
 

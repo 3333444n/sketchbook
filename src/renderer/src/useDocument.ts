@@ -1,32 +1,28 @@
-// The window's document lifecycle: initial load, pushed loads, dirty/empty
-// tracking, debounced crash-recovery autosave, and save / save as.
+// One document's lifecycle: load, dirty/empty tracking, debounced crash-recovery
+// autosave, and save / save as. All state lives in this hook instance, so several
+// editors (tabs) can coexist.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { CaptureUpdateAction, hashElementsVersion, serializeAsJSON } from '@excalidraw/excalidraw'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { hashElementsVersion, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import type {
   AppState,
-  BinaryFiles,
   ExcalidrawImperativeAPI,
-  ExcalidrawInitialDataState
+  ExcalidrawInitialDataState,
+  LibraryItems
 } from '@excalidraw/excalidraw/types'
 import type { DocPayload } from '../../shared/ipc'
 import { docName, parseContents, type LoadedScene } from './blob'
-import { loadLibrary } from './library'
+import { bridge } from './bridge'
 
 const AUTOSAVE_DELAY_MS = 1000
 
-// One fetch per window, even if React (StrictMode) runs our state initializer twice.
-let initialDocRequest: Promise<DocPayload> | null = null
-const getInitialDocOnce = (): Promise<DocPayload> =>
-  (initialDocRequest ??= window.sketchbook.getInitialDoc())
-
-/** The parts of a file's appState worth applying when opening it (not view/UI state). */
 type DocumentAppState = Pick<
   AppState,
   'viewBackgroundColor' | 'gridSize' | 'gridStep' | 'gridModeEnabled'
 >
 
+/** The parts of a file's appState worth applying when opening it (not view/UI state). */
 function documentAppState(appState: LoadedScene['appState']): DocumentAppState {
   return {
     viewBackgroundColor: appState.viewBackgroundColor,
@@ -40,89 +36,98 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-export type DocumentController = {
-  /** Promise for Excalidraw's `initialData` prop (created once per window). */
-  initialData: Promise<ExcalidrawInitialDataState>
-  /** File basename for Excalidraw's `name` prop (default export filename). */
-  name: string | undefined
-  /** Pass to Excalidraw's `excalidrawAPI` prop. */
-  setApi: (api: ExcalidrawImperativeAPI) => void
-  /** Pass to Excalidraw's `onChange` prop. */
-  onChange: (
-    elements: readonly ExcalidrawElement[],
-    appState: AppState,
-    files: BinaryFiles
-  ) => void
-  save: (opts: { saveAs: boolean }) => Promise<void>
-}
+type InitialLoad = { data: ExcalidrawInitialDataState; error: string | null }
 
-export function useDocument(): DocumentController {
-  const sketchbook = window.sketchbook
-  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
-  const [name, setName] = useState<string | undefined>(undefined)
-
-  // Scene version at the last load/save. `null` = take it from the next settled onChange
-  // (Excalidraw re-restores initialData, so we baseline on what it actually ends up with).
-  const baseline = useRef<number | null>(null)
-  // Recovered docs are dirty until saved, even though nothing changed since load.
-  const forceDirty = useRef(false)
-  // After a failed load, never overwrite the original file in place.
-  const forceSaveAs = useRef(false)
-  // Messages to show once the editor is ready (toast / error dialog).
-  const pendingToast = useRef<string | null>(null)
-  const pendingError = useRef<string | null>(null)
-
-  const lastVersion = useRef<number | null>(null)
-  const dirty = useRef(false)
-  const empty = useRef<boolean | null>(null)
-  const saving = useRef(false)
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const applyMeta = useCallback((doc: DocPayload) => {
-    setName(docName(doc.path))
-    forceDirty.current = !!doc.recovered
-    forceSaveAs.current = false
-    pendingToast.current = doc.recovered ? 'Recovered unsaved changes' : null
-  }, [])
-
-  const loadFailed = useCallback((err: unknown) => {
-    console.error('Failed to load document', err)
-    forceSaveAs.current = true
-    pendingError.current = `Couldn't open this file: ${errorText(err)}`
-  }, [])
-
-  // ---- initial load (once per window) ------------------------------------
-  const [initialData] = useState<Promise<ExcalidrawInitialDataState>>(async () => {
-    const libraryItems = loadLibrary()
-    let doc: DocPayload
-    try {
-      doc = await getInitialDocOnce()
-    } catch (err) {
-      loadFailed(err)
-      return { libraryItems }
-    }
-    applyMeta(doc)
-    if (!doc.contents) return { libraryItems }
-    try {
-      const scene = await parseContents(doc.contents)
-      return {
+async function loadDoc(doc: DocPayload, libraryItems: LibraryItems): Promise<InitialLoad> {
+  if (!doc.contents) return { data: { libraryItems }, error: null }
+  try {
+    const scene = await parseContents(doc.contents)
+    return {
+      data: {
         elements: scene.elements,
         appState: documentAppState(scene.appState),
         files: scene.files,
         libraryItems,
         scrollToContent: true
-      }
-    } catch (err) {
-      loadFailed(err)
-      return { libraryItems }
+      },
+      error: null
     }
-  })
+  } catch (err) {
+    console.error('Failed to load document', err)
+    return {
+      data: { libraryItems },
+      error:
+        "Couldn't open this file. It may be damaged or not an Excalidraw drawing. " +
+        'Use Save As to keep your work without overwriting it.'
+    }
+  }
+}
 
-  // ---- dirty / empty / autosave --------------------------------------------
-  const cancelAutosave = (): void => {
+export type DocumentController = {
+  /** For Excalidraw's `initialData` prop. */
+  initialData: Promise<ExcalidrawInitialDataState>
+  /** File basename for Excalidraw's `name` prop (default export filename). */
+  name: string | undefined
+  /** For Excalidraw's `excalidrawAPI` prop. */
+  setApi: (api: ExcalidrawImperativeAPI) => void
+  /** For Excalidraw's `onChange` prop. */
+  onChange: (elements: readonly ExcalidrawElement[], appState: AppState) => void
+  save: (opts: { saveAs: boolean }) => Promise<void>
+  /** Imperative API once Excalidraw has mounted. */
+  getApi: () => ExcalidrawImperativeAPI | null
+}
+
+export function useDocument(
+  doc: DocPayload,
+  getInitialLibrary: () => LibraryItems
+): DocumentController {
+  const { docId } = doc
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
+  const [name, setName] = useState(() => docName(doc.path))
+
+  // Scene version at the last load/save; `null` = take it from the first settled
+  // onChange (Excalidraw re-restores initialData, so baseline on what it ends up with).
+  const baseline = useRef<number | null>(null)
+  // Recovered docs are dirty until saved, even though nothing changed since load.
+  const forceDirty = useRef(!!doc.recovered)
+  // After a failed load, never overwrite the original file in place.
+  const forceSaveAs = useRef(false)
+  // Shown once the editor is ready.
+  const pendingToast = useRef<string | null>(doc.recovered ? 'Recovered unsaved changes' : null)
+  const pendingError = useRef<string | null>(null)
+
+  const lastVersion = useRef<number | null>(null)
+  // null until first reported, so a fresh editor always tells main its state.
+  const dirty = useRef<boolean | null>(null)
+  const empty = useRef<boolean | null>(null)
+  const saving = useRef(false)
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Parsed once per editor instance (an instance's doc prop never changes).
+  const [load] = useState(() => loadDoc(doc, getInitialLibrary()))
+  const initialData = useMemo(() => load.then((result) => result.data), [load])
+
+  useEffect(() => {
+    let live = true
+    void load.then(({ error }) => {
+      if (!live || !error) return
+      forceSaveAs.current = true
+      const api = apiRef.current
+      if (api && !api.getAppState().isLoading) {
+        api.updateScene({ appState: { errorMessage: error } })
+      } else {
+        pendingError.current = error
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [load])
+
+  const cancelAutosave = useCallback((): void => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
     autosaveTimer.current = null
-  }
+  }, [])
 
   const serialize = (api: ExcalidrawImperativeAPI): string =>
     serializeAsJSON(api.getSceneElements(), api.getAppState(), api.getFiles(), 'local')
@@ -132,11 +137,11 @@ export function useDocument(): DocumentController {
     autosaveTimer.current = setTimeout(() => {
       autosaveTimer.current = null
       const api = apiRef.current
-      if (api && dirty.current) sketchbook.autosave(serialize(api))
+      if (api && dirty.current) bridge.autosave(docId, serialize(api))
     }, AUTOSAVE_DELAY_MS)
   }
 
-  /** Recompute dirty/empty from the scene and notify main only on transitions. */
+  /** Recompute dirty/empty from the scene; notify main only on transitions. */
   const evaluate = (elements: readonly ExcalidrawElement[]): void => {
     const version = hashElementsVersion(elements)
     if (baseline.current === null) baseline.current = version
@@ -144,23 +149,26 @@ export function useDocument(): DocumentController {
     const isEmpty = !elements.some((el) => !el.isDeleted)
     if (isEmpty !== empty.current) {
       empty.current = isEmpty
-      sketchbook.setEmpty(isEmpty)
+      bridge.setEmpty(docId, isEmpty)
     }
 
+    // setDirty(true) always goes out before the first autosave: main ignores
+    // autosaves from clean windows.
     const isDirty = forceDirty.current || version !== baseline.current
     if (isDirty !== dirty.current) {
       dirty.current = isDirty
-      sketchbook.setDirty(isDirty)
+      bridge.setDirty(docId, isDirty)
     }
 
     if (version !== lastVersion.current) {
+      const isFirst = lastVersion.current === null
       lastVersion.current = version
-      if (isDirty) scheduleAutosave()
-      else cancelAutosave()
+      // A recovered scene is already in the journal; don't rewrite it on load.
+      if (isDirty && !isFirst) scheduleAutosave()
+      else if (!isDirty) cancelAutosave()
     }
   }
 
-  /** Show anything queued during load, once the editor can display it. */
   const flushMessages = (api: ExcalidrawImperativeAPI): void => {
     if (pendingError.current) {
       api.updateScene({ appState: { errorMessage: pendingError.current } })
@@ -175,47 +183,20 @@ export function useDocument(): DocumentController {
   const onChange = (elements: readonly ExcalidrawElement[], appState: AppState): void => {
     if (appState.isLoading) return
     evaluate(elements)
-    if (apiRef.current && (pendingError.current || pendingToast.current)) {
-      // Defer: calling setState from inside onChange re-enters Excalidraw's update cycle.
-      const api = apiRef.current
+    const api = apiRef.current
+    if (api && (pendingError.current || pendingToast.current)) {
+      // Defer: setting state from inside onChange re-enters Excalidraw's update cycle.
       queueMicrotask(() => flushMessages(api))
     }
   }
 
-  // ---- documents pushed by main into this (empty) window --------------------
-  useEffect(() => {
-    return sketchbook.onLoadDoc(async (doc) => {
-      const api = apiRef.current
-      if (!api) return
-      applyMeta(doc)
-      try {
-        const scene = doc.contents ? await parseContents(doc.contents) : null
-        api.updateScene({
-          elements: scene?.elements ?? [],
-          appState: scene ? documentAppState(scene.appState) : null,
-          captureUpdate: CaptureUpdateAction.NEVER
-        })
-        if (scene) api.addFiles(Object.values(scene.files))
-        api.history.clear()
-        api.scrollToContent(undefined, { animate: false })
-      } catch (err) {
-        loadFailed(err)
-      }
-      baseline.current = hashElementsVersion(api.getSceneElementsIncludingDeleted())
-      evaluate(api.getSceneElementsIncludingDeleted())
-      flushMessages(api)
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ---- save ------------------------------------------------------------------
-  const save = useCallback(async ({ saveAs }: { saveAs: boolean }) => {
+  const save = async ({ saveAs }: { saveAs: boolean }): Promise<void> => {
     const api = apiRef.current
     if (!api || saving.current) return
     saving.current = true
     const version = hashElementsVersion(api.getSceneElementsIncludingDeleted())
     try {
-      const result = await sketchbook.save(serialize(api), {
+      const result = await bridge.save(docId, serialize(api), {
         saveAs: saveAs || forceSaveAs.current
       })
       if (!result) return // cancelled
@@ -231,14 +212,15 @@ export function useDocument(): DocumentController {
     } finally {
       saving.current = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }
 
   const setApi = useCallback((api: ExcalidrawImperativeAPI) => {
     apiRef.current = api
   }, [])
 
-  useEffect(() => cancelAutosave, [])
+  const getApi = useCallback(() => apiRef.current, [])
 
-  return { initialData, name, setApi, onChange, save }
+  useEffect(() => cancelAutosave, [cancelAutosave])
+
+  return { initialData, name, setApi, onChange, save, getApi }
 }

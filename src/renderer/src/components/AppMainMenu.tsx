@@ -4,6 +4,7 @@
 import { memo } from 'react'
 import { MainMenu } from '@excalidraw/excalidraw'
 import type { ThemePreference } from '../theme'
+import { bridge } from '../bridge'
 import { shortcut } from '../shortcuts'
 import { GitHubIcon, OpenIcon, SaveAsIcon, SaveIcon } from './icons'
 
@@ -22,16 +23,19 @@ export const AppMainMenu = memo(function AppMainMenu({
   theme,
   onThemeChange
 }: Props): React.JSX.Element {
-  const sketchbook = window.sketchbook
   return (
     <MainMenu>
-      <MainMenu.Item icon={OpenIcon} shortcut={shortcut('CtrlOrCmd+O')} onSelect={sketchbook.open}>
+      <MainMenu.Item icon={<OpenIcon />} shortcut={shortcut('CtrlOrCmd+O')} onSelect={bridge.open}>
         Open…
       </MainMenu.Item>
-      <MainMenu.Item icon={SaveIcon} shortcut={shortcut('CtrlOrCmd+S')} onSelect={onSave}>
+      <MainMenu.Item icon={<SaveIcon />} shortcut={shortcut('CtrlOrCmd+S')} onSelect={onSave}>
         Save
       </MainMenu.Item>
-      <MainMenu.Item icon={SaveAsIcon} shortcut={shortcut('CtrlOrCmd+Shift+S')} onSelect={onSaveAs}>
+      <MainMenu.Item
+        icon={<SaveAsIcon />}
+        shortcut={shortcut('CtrlOrCmd+Shift+S')}
+        onSelect={onSaveAs}
+      >
         Save as…
       </MainMenu.Item>
       <MainMenu.DefaultItems.SaveAsImage />
@@ -40,7 +44,10 @@ export const AppMainMenu = memo(function AppMainMenu({
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
-      <MainMenu.Item icon={GitHubIcon} onSelect={() => sketchbook.openExternal(EXCALIDRAW_GITHUB_URL)}>
+      <MainMenu.Item
+        icon={<GitHubIcon />}
+        onSelect={() => bridge.openExternal(EXCALIDRAW_GITHUB_URL)}
+      >
         Excalidraw on GitHub
       </MainMenu.Item>
       <MainMenu.Separator />

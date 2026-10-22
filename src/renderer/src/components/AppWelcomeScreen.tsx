@@ -2,12 +2,12 @@
 
 import { memo } from 'react'
 import { WelcomeScreen } from '@excalidraw/excalidraw'
+import { bridge } from '../bridge'
 import { shortcut } from '../shortcuts'
 import { EXCALIDRAW_GITHUB_URL } from './AppMainMenu'
 import { NewWindowIcon, OpenIcon, SketchbookMark } from './icons'
 
 export const AppWelcomeScreen = memo(function AppWelcomeScreen(): React.JSX.Element {
-  const sketchbook = window.sketchbook
   return (
     <WelcomeScreen>
       <WelcomeScreen.Hints.MenuHint />
@@ -16,7 +16,7 @@ export const AppWelcomeScreen = memo(function AppWelcomeScreen(): React.JSX.Elem
       <WelcomeScreen.Center>
         <WelcomeScreen.Center.Logo>
           <div className="sketchbook-wordmark">
-            {SketchbookMark}
+            <SketchbookMark />
             <span>Sketchbook</span>
           </div>
         </WelcomeScreen.Center.Logo>
@@ -27,16 +27,16 @@ export const AppWelcomeScreen = memo(function AppWelcomeScreen(): React.JSX.Elem
         </WelcomeScreen.Center.Heading>
         <WelcomeScreen.Center.Menu>
           <WelcomeScreen.Center.MenuItem
-            icon={OpenIcon}
+            icon={<OpenIcon />}
             shortcut={shortcut('CtrlOrCmd+O')}
-            onSelect={sketchbook.open}
+            onSelect={bridge.open}
           >
             Open…
           </WelcomeScreen.Center.MenuItem>
           <WelcomeScreen.Center.MenuItem
-            icon={NewWindowIcon}
+            icon={<NewWindowIcon />}
             shortcut={shortcut('CtrlOrCmd+N')}
-            onSelect={sketchbook.newWindow}
+            onSelect={bridge.newWindow}
           >
             New window
           </WelcomeScreen.Center.MenuItem>
@@ -45,7 +45,7 @@ export const AppWelcomeScreen = memo(function AppWelcomeScreen(): React.JSX.Elem
         <button
           type="button"
           className="sketchbook-credit"
-          onClick={() => sketchbook.openExternal(EXCALIDRAW_GITHUB_URL)}
+          onClick={() => bridge.openExternal(EXCALIDRAW_GITHUB_URL)}
         >
           Built with Excalidraw
         </button>
