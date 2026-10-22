@@ -16,7 +16,6 @@ import {
 } from 'electron'
 import { basename, dirname, join } from 'path'
 import { randomUUID } from 'crypto'
-import { is } from '@electron-toolkit/utils'
 import {
   IPC,
   type CloseDecision,
@@ -26,7 +25,7 @@ import {
   type SaveResult
 } from '../shared/ipc'
 import { TRAFFIC_LIGHT_POSITION } from '../shared/chrome'
-import { loadRenderer } from './protocol'
+import { isAppUrl, loadRenderer } from './protocol'
 import {
   atomicWrite,
   displayName,
@@ -104,20 +103,6 @@ function send(w: WinState<BrowserWindow>, channel: string, ...args: unknown[]): 
 
 // ---------------------------------------------------------------------------
 // Navigation / external links
-
-function isAppUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    if (u.protocol === 'app:') return true
-    const dev = process.env['ELECTRON_RENDERER_URL']
-    if (is.dev && dev && u.origin === new URL(dev).origin) return true
-    // Fallback while the renderer is loaded via loadFile.
-    if (u.protocol === 'file:' && u.pathname.endsWith('/renderer/index.html')) return true
-  } catch {
-    // fall through
-  }
-  return false
-}
 
 function isExternalAllowed(url: string): boolean {
   try {
