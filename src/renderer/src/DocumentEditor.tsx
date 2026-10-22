@@ -1,8 +1,16 @@
-// One drawing: an Excalidraw instance plus its document lifecycle. Self-contained
-// so a window can later host several of these (tabs), with only the active one
-// receiving menu actions.
+// One tab's drawing: an Excalidraw instance plus its document lifecycle.
+//
+// Several of these stay mounted at once (see App). Inactive ones are hidden with
+// `visibility: hidden` rather than `display: none`, so their canvas keeps its size
+// and is correct the instant the tab is shown again (no resize / refresh needed).
+//
+// Keyboard isolation: Excalidraw is left at `handleKeyboardGlobally={false}` (its
+// default), so it only handles keydown events that reach its own container. Only the
+// active editor's container is focusable/visible, and App focuses it on activation.
+// Clipboard (copy/cut/paste) handlers are bound on `document` but each instance
+// ignores events unless `document.activeElement` is inside its own container.
 
-import { useCallback, useEffect, useEffectEvent, useRef } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import type {
   ExcalidrawElement,
@@ -14,6 +22,7 @@ import type { DocPayload, MenuAction } from '../../shared/ipc'
 import { bridge } from './bridge'
 import { AppMainMenu } from './components/AppMainMenu'
 import { AppWelcomeScreen } from './components/AppWelcomeScreen'
+import type { EditorEvents, EditorHandle, EditorInit } from './tabs'
 import type { ThemePreference } from './theme'
 import { useDocument } from './useDocument'
 
@@ -27,82 +36,99 @@ const UI_OPTIONS = {
   }
 }
 
-type Props = {
-  doc: DocPayload
-  /** Only the active editor responds to menu actions. */
-  active: boolean
-  theme: Theme
-  themePreference: ThemePreference
-  onThemePreferenceChange: (pref: ThemePreference) => void
-  /** Read when the editor mounts, so each new editor starts with the latest library. */
-  getInitialLibrary: () => LibraryItems
-  onLibraryChange: (items: LibraryItems) => void
+// Open http(s) element links in the system browser rather than a new Electron window.
+function onLinkOpen(
+  element: NonDeletedExcalidrawElement,
+  event: CustomEvent<{ nativeEvent: MouseEvent | React.PointerEvent<HTMLCanvasElement> }>
+): void {
+  const link = element.link
+  if (link && /^https?:\/\//i.test(link)) {
+    event.preventDefault()
+    bridge.openExternal(link)
+  }
 }
 
-export function DocumentEditor({
+type BodyProps = {
+  doc: DocPayload
+  init: EditorInit | undefined
+  /** Only read at mount (focus on open). */
+  autoFocus: boolean
+  theme: Theme
+  themePreference: ThemePreference
+  events: EditorEvents
+  containerRef: React.RefObject<HTMLDivElement | null>
+}
+
+/** The Excalidraw tree. Memoized: it does not depend on whether the tab is active. */
+const EditorBody = memo(function EditorBody({
   doc,
-  active,
+  init,
+  autoFocus,
   theme,
   themePreference,
-  onThemePreferenceChange,
-  getInitialLibrary,
-  onLibraryChange
-}: Props): React.JSX.Element {
-  const editor = useDocument(doc, getInitialLibrary)
-  const { save, getApi } = editor
+  events,
+  containerRef
+}: BodyProps): React.JSX.Element {
+  const { docId } = doc
+  const editor = useDocument(doc, init, events)
   const lastEditorTheme = useRef(theme)
 
-  const onSave = useCallback(() => void save({ saveAs: false }), [save])
-  const onSaveAs = useCallback(() => void save({ saveAs: true }), [save])
+  // App calls the handle long after render; route it to this render's closures.
+  const latest = useRef(editor)
+  latest.current = editor
+  const themeRef = useRef(theme)
+  themeRef.current = theme
 
-  const handleMenu = useEffectEvent((action: MenuAction) => {
-    const openDialog = (dialog: AppState['openDialog']): void =>
-      getApi()?.updateScene({ appState: { openDialog: dialog } })
-    switch (action) {
-      case 'save':
-      case 'save-and-close': // main closes the window once the save succeeds
-        return onSave()
-      case 'save-as':
-        return onSaveAs()
-      case 'export-image':
-        return openDialog({ name: 'imageExport' })
-      case 'mermaid':
-        return openDialog({ name: 'ttd', tab: 'mermaid' })
-      // Main handles these natively; forward if they ever arrive here.
-      case 'new':
-        return bridge.newWindow()
-      case 'open':
-        return bridge.open()
-    }
-  })
+  const onSave = useCallback(() => void latest.current.save({ saveAs: false }), [])
+  const onSaveAs = useCallback(() => void latest.current.save({ saveAs: true }), [])
 
   useEffect(() => {
-    if (!active) return
-    return bridge.onMenu((action) => handleMenu(action))
-  }, [active])
-
-  const onChange = (elements: readonly ExcalidrawElement[], appState: AppState): void => {
-    editor.onChange(elements, appState)
-    // Theme can also change via Excalidraw's own shortcut (Alt+Shift+D). Adopt it as a
-    // manual choice, but only when the editor's theme itself changed: right after the
-    // `theme` prop changes, onChange still reports the old theme for one tick.
-    if (appState.theme !== lastEditorTheme.current) {
-      lastEditorTheme.current = appState.theme
-      if (appState.theme !== theme) onThemePreferenceChange(appState.theme)
+    const menu = (action: MenuAction): void => {
+      const openDialog = (dialog: AppState['openDialog']): void =>
+        latest.current.getApi()?.updateScene({ appState: { openDialog: dialog } })
+      switch (action) {
+        case 'save':
+          return onSave()
+        case 'save-as':
+          return onSaveAs()
+        case 'export-image':
+          return openDialog({ name: 'imageExport' })
+        case 'mermaid':
+          return openDialog({ name: 'ttd', tab: 'mermaid' })
+      }
     }
-  }
-
-  // Open http(s) element links in the system browser rather than a new Electron window.
-  const onLinkOpen = (
-    element: NonDeletedExcalidrawElement,
-    event: CustomEvent<{ nativeEvent: MouseEvent | React.PointerEvent<HTMLCanvasElement> }>
-  ): void => {
-    const link = element.link
-    if (link && /^https?:\/\//i.test(link)) {
-      event.preventDefault()
-      bridge.openExternal(link)
+    const handle: EditorHandle = {
+      save: (opts) => latest.current.save(opts),
+      snapshot: () => latest.current.snapshot(),
+      menu,
+      focus: () => {
+        const el = containerRef.current?.querySelector<HTMLElement>('.excalidraw-container')
+        if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
+      },
+      getApi: () => latest.current.getApi()
     }
-  }
+    events.register(docId, handle)
+    return () => events.register(docId, null)
+  }, [docId, events, onSave, onSaveAs, containerRef])
+
+  const onChange = useCallback(
+    (elements: readonly ExcalidrawElement[], appState: AppState): void => {
+      latest.current.onChange(elements, appState)
+      // Theme can also change via Excalidraw's own shortcut (Alt+Shift+D). Adopt it as a
+      // manual choice, but only when the editor's theme itself changed: right after the
+      // `theme` prop changes, onChange still reports the old theme for one tick.
+      if (appState.theme !== lastEditorTheme.current) {
+        lastEditorTheme.current = appState.theme
+        if (appState.theme !== themeRef.current) events.onThemePreferenceChange(appState.theme)
+      }
+    },
+    [events]
+  )
+
+  const onLibraryChange = useCallback(
+    (items: LibraryItems) => events.onLibraryChange(docId, items),
+    [docId, events]
+  )
 
   return (
     <Excalidraw
@@ -113,6 +139,7 @@ export function DocumentEditor({
       onLinkOpen={onLinkOpen}
       name={editor.name}
       theme={theme}
+      autoFocus={autoFocus}
       aiEnabled={false}
       UIOptions={UI_OPTIONS}
     >
@@ -120,9 +147,35 @@ export function DocumentEditor({
         onSave={onSave}
         onSaveAs={onSaveAs}
         theme={themePreference}
-        onThemeChange={onThemePreferenceChange}
+        onThemeChange={events.onThemePreferenceChange}
       />
       <AppWelcomeScreen />
     </Excalidraw>
   )
+})
+
+type Props = Omit<BodyProps, 'containerRef' | 'autoFocus'> & {
+  /** The visible tab. Toggling this re-renders only the wrapper, not Excalidraw. */
+  active: boolean
 }
+
+export const DocumentEditor = memo(function DocumentEditor({
+  active,
+  ...body
+}: Props): React.JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null)
+  // Focus on mount only if this tab opens as the active one.
+  const autoFocus = useRef(active).current
+  return (
+    <div
+      ref={containerRef}
+      data-doc-id={body.doc.docId}
+      className={`sketchbook-editor${active ? ' sketchbook-editor--active' : ''}`}
+      // Hidden editors are inert: no focus, no pointer events, not in the a11y tree.
+      inert={!active}
+      aria-hidden={!active}
+    >
+      <EditorBody {...body} autoFocus={autoFocus} containerRef={containerRef} />
+    </div>
+  )
+})
