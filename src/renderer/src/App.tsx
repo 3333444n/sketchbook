@@ -239,6 +239,10 @@ function App(): React.JSX.Element {
         if (decision === 'save' && !(await saveDoc(docId))) return
         removeTab(docId)
         bridge.docClosed(docId)
+        // Main treats some remaining tab as active until told otherwise; report
+        // after every close, even when the active tab didn't change.
+        const { activeId } = modelRef.current
+        if (activeId) bridge.setActiveDoc(activeId)
       } catch (err) {
         console.error('Close failed', err)
       } finally {
