@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { Registry } from '../registry'
 import type { DocPayload } from '../../shared/ipc'
 
-const p = (docId: string, path: string | null = null, contents: string | null = null): DocPayload => ({
+const p = (
+  docId: string,
+  path: string | null = null,
+  contents: string | null = null
+): DocPayload => ({
   docId,
   path,
   contents

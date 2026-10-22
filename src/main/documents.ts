@@ -238,7 +238,13 @@ function addDocsToWindow(
   if (!items.length) return
   for (const it of items) reg.addDoc(w.id, it.payload, { dirty: it.dirty })
   const activeDocId = items[items.length - 1].payload.docId
-  if (w.delivered) send(w, IPC.openDocs, items.map((i) => i.payload), activeDocId)
+  if (w.delivered)
+    send(
+      w,
+      IPC.openDocs,
+      items.map((i) => i.payload),
+      activeDocId
+    )
   updateWindowChrome(w.id)
 }
 

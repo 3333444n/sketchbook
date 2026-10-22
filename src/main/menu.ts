@@ -8,7 +8,13 @@ import { newTab, newUntitledWindow, sendMenuToFocused, showOpenDialog } from './
  * duplicates that still fire.
  */
 function hiddenAlias(accelerator: string, click: () => void): MenuItemConstructorOptions {
-  return { label: accelerator, accelerator, visible: false, acceleratorWorksWhenHidden: true, click }
+  return {
+    label: accelerator,
+    accelerator,
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click
+  }
 }
 
 export function buildMenu(): void {
