@@ -4,6 +4,15 @@
   "description": "Sketchbook — an offline desktop whiteboard built with Excalidraw",
   "main": "./out/main/index.js",
   "author": "kickeortiz",
+  "license": "MIT",
+  "homepage": "https://github.com/3333444n/sketchbook#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/3333444n/sketchbook.git"
+  },
+  "bugs": {
+    "url": "https://github.com/3333444n/sketchbook/issues"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -18,7 +27,8 @@
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:mac": "pnpm run build && electron-builder --mac",
     "test:e2e": "electron-vite build && playwright test",
-    "icons": "sh scripts/make-icons.sh"
+    "icons": "sh scripts/make-icons.sh",
+    "screenshots": "electron-vite build && node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -48,5 +58,5 @@
     "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^5.0.5"
   },
-  "license": "MIT"
+  "packageManager": "pnpm@10.34.4"
 }
