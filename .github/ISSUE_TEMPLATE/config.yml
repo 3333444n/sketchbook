@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/3333444n/sketchbook/security/advisories/new
+    about: Please report security issues privately, not as public issues.
+  - name: Drawing engine bugs (Excalidraw)
+    url: https://github.com/excalidraw/excalidraw/issues
+    about: Bugs that also reproduce on excalidraw.com belong upstream.
