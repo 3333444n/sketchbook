@@ -21,22 +21,35 @@ In production the renderer loads from a custom privileged scheme instead of `fil
 
 - Excalidraw's fonts (about 13 MB, including the CJK font Xiaolai) are copied from
   `node_modules/@excalidraw/excalidraw/dist/prod/fonts` into the renderer build.
-- `boot.js` sets `window.EXCALIDRAW_ASSET_PATH` to the app's own base URL. It is loaded from
+- `src/renderer/public/boot.js` sets `window.EXCALIDRAW_ASSET_PATH` to the app's own base URL. It is loaded from
   `src/renderer/index.html` **before** the main bundle, because Excalidraw reads the variable
   at import time. Without it Excalidraw fetches fonts from a CDN; offline, text silently falls
   back to a system font.
+- Excalidraw also registers every font face with a second, CDN source (`esm.sh`). The build
+  (`electron.vite.config.ts`) strips that fallback from Excalidraw's dist, so no font URL ever
+  points off the machine. If a future Excalidraw changes the code shape, the build fails
+  loudly instead of shipping the fallback.
 
 ### 3. The network is blocked twice
 
-- **CSP** in `src/renderer/index.html` allows only `'self'` (plus `data:` and `blob:` where
-  Excalidraw needs them for images, fonts and workers). No remote origin is ever listed.
-- **Main-process block:** a `session.webRequest.onBeforeRequest` handler cancels every request
-  whose scheme isn't `app:`, `data:` or `blob:` (the dev server origin is allowed in dev).
-  This catches anything the CSP doesn't, such as requests made outside the page.
+- **CSP** in `src/renderer/index.html`:
+  `script-src 'self' 'wasm-unsafe-eval'`, everything else `'self'` plus `data:` and `blob:`
+  where Excalidraw needs them for images, fonts and workers. No remote origin is ever listed.
+  `'wasm-unsafe-eval'` only allows compiling WebAssembly, which the font subsetter used by
+  SVG/PNG export needs; JavaScript `eval` stays blocked. To make that work the build also
+  rewrites the subsetter's embind `new Function(...)` helpers into plain closures, and keeps
+  the subset worker's dependencies in their own chunk so the worker never imports the main
+  app chunk (see [upgrading-excalidraw.md](upgrading-excalidraw.md)).
+- **Main-process block:** a `session.webRequest.onBeforeRequest` handler in
+  `src/main/protocol.ts` cancels every request whose scheme isn't `app:`, `data:`, `blob:`,
+  `devtools:` or `chrome-extension:`, apart from `file:` reads inside the renderer folder made by
+  the `app://` handler itself (the dev server origin is allowed in dev). Blocked requests are
+  logged. This catches anything the CSP doesn't, such as requests made outside the page.
 
 ### 4. No File System Access API
 
-`boot.js` deletes `window.showSaveFilePicker` and `window.showOpenFilePicker`. Excalidraw (via
+`boot.js` deletes `window.showSaveFilePicker`, `window.showOpenFilePicker` and
+`window.showDirectoryPicker`. Excalidraw (via
 browser-fs-access) then falls back to `<a download>` and `<input type=file>`, which work in
 Electron. Main handles `will-download` in `src/main/downloads.ts` with a native Save dialog.
 That covers image export (PNG/SVG) and library export. `.excalidraw` open and save never use
@@ -54,9 +67,12 @@ system browser via `shell.openExternal`.
 
 ### Automated
 
-The e2e suite (planned, `tests/e2e/`) launches the production build with every request that
-isn't `app:`, `data:` or `blob:` failing the test, then checks that the canvas renders and
-that `document.fonts.check('20px Excalifont')` is true after drawing text. See
+`tests/e2e/offline.spec.ts` launches the production build with an isolated profile and
+records every request (in the page and in the main session) and every CSP violation. It
+draws text in each font from the font picker, opens the Mermaid dialog and exports PNG and
+SVG, then fails if anything non-local was requested or any CSP violation happened. Other
+cases check that the main process blocks remote requests and that `app://` refuses path
+traversal. `packaged.spec.ts` repeats the smoke check against the built `.app`. See
 [testing.md](testing.md).
 
 ### Manual

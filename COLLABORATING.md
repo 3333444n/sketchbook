@@ -10,7 +10,8 @@ If you're an AI coding agent, read [AGENTS.md](AGENTS.md) instead (or as well).
 
 - macOS on Apple Silicon (the only build target today)
 - Node 24
-- pnpm 10 (`corepack enable` or `npm i -g pnpm@10`)
+- pnpm 10 (`corepack enable` picks up the version pinned in `package.json`'s `packageManager`,
+  or `npm i -g pnpm@10`)
 - Git
 
 ## Setup
@@ -24,14 +25,15 @@ pnpm dev
 
 ## Dev loop
 
-| Command | What it does |
-|---|---|
-| `pnpm dev` | Launches the app with hot reload for the renderer; main/preload rebuild and restart. |
-| `pnpm typecheck` | Type-checks node (main, preload, shared) and web (renderer) projects. |
-| `pnpm test` | Vitest unit tests (`src/**/__tests__/**/*.test.ts`). |
-| `pnpm test:e2e` | Playwright e2e against the built app, network blocked (planned). |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier. |
-| `pnpm build:mac` | Builds an ad-hoc-signed arm64 dmg into `dist/`. |
+| Command                     | What it does                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `pnpm dev`                  | Launches the app with hot reload for the renderer; main/preload rebuild and restart. |
+| `pnpm typecheck`            | Type-checks node (main, preload, shared) and web (renderer) projects.                |
+| `pnpm test`                 | Vitest unit tests (`src/**/__tests__/**/*.test.ts`).                                 |
+| `pnpm test:e2e`             | Builds, then runs the Playwright `_electron` e2e suite against the production app.   |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier.                                                                   |
+| `pnpm build:mac`            | Builds an ad-hoc-signed arm64 dmg into `dist/`.                                      |
+| `pnpm screenshots`          | Builds, then regenerates the README images in `docs/images/`.                        |
 
 ### Debugging
 
@@ -52,6 +54,8 @@ src/
   main/              Electron main process (windows, files, menu, recovery, protocol)
   preload/           contextBridge API (window.sketchbook)
   renderer/          React app embedding Excalidraw
+tests/e2e/           Playwright _electron end-to-end tests
+scripts/             Icon and README-screenshot generators
 docs/                Architecture, IPC, offline, performance, testing, releasing, ADRs
 build/               Icons and entitlements for electron-builder
 ```
@@ -77,12 +81,13 @@ See [docs/architecture.md](docs/architecture.md) for how the pieces fit together
 
 ## PR checklist
 
-- [ ] `pnpm typecheck` and `pnpm test` pass
+- [ ] `pnpm lint`, `pnpm typecheck` and `pnpm test` pass
 - [ ] e2e passes locally when the change touches files, windows, tabs or offline behaviour
 - [ ] No new network requests (see [docs/offline.md](docs/offline.md))
 - [ ] IPC changes start in `src/shared/ipc.ts` and update preload, main, renderer and
       [docs/ipc-contract.md](docs/ipc-contract.md) together
 - [ ] Docs and ADRs updated where behaviour or architecture changed
+- [ ] `pnpm screenshots` re-run if the change visibly alters the UI shown in the README
 - [ ] Manually tested in `pnpm dev` (and in a packaged build for packaging changes)
 
 The same list is in [.github/pull_request_template.md](.github/pull_request_template.md).
@@ -92,9 +97,9 @@ The same list is in [.github/pull_request_template.md](.github/pull_request_temp
 - Prettier (`.prettierrc.yaml`: single quotes, no semicolons, 100 columns, no trailing commas)
   and ESLint (`eslint.config.mjs`) are configured. Run `pnpm format` and `pnpm lint`.
 - TypeScript everywhere; avoid `any`. Validate untrusted input (IPC arguments, file contents).
-- Keep `src/main/fileio.ts` and `src/main/recovery.ts` free of `electron` imports so they stay
+- Keep `src/main/fileio.ts`, `src/main/recovery.ts` and `src/main/registry.ts` free of `electron` imports so they stay
   unit-testable.
-- Comments explain *why*, not *what*.
+- Comments explain _why_, not _what_.
 
 ## Testing expectations
 

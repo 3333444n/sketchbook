@@ -4,16 +4,14 @@ Sketchbook is an Electron app with the standard three layers. The only thing tha
 layers is the contract in [`src/shared/ipc.ts`](../src/shared/ipc.ts) (v2: tabs), documented
 in [ipc-contract.md](ipc-contract.md).
 
-> Status: the v2 (tabs) contract is the target design. Main and renderer are being migrated
-> to it; some code may still reflect v1 (one document per window) for a short while.
-
 ## Processes and layers
 
 ```mermaid
 flowchart LR
   subgraph Main["Main process (Node, privileged)"]
     idx["index.ts<br/>bootstrap"]
-    docs["documents.ts<br/>windows, doc registry,<br/>open/save, prompts, IPC"]
+    docs["documents.ts<br/>windows, open/save,<br/>prompts, IPC"]
+    reg["registry.ts<br/>docs per window"]
     menu["menu.ts<br/>native menu"]
     proto["protocol.ts<br/>app://bundle/"]
     dl["downloads.ts<br/>will-download"]
@@ -25,7 +23,7 @@ flowchart LR
   subgraph Win["BrowserWindow (one per window)"]
     pre["preload/index.ts<br/>window.sketchbook"]
     subgraph R["Renderer process (React)"]
-      app["App.tsx<br/>tab strip, theme, library"]
+      app["App.tsx + TabStrip<br/>tabs, theme, library"]
       ed1["DocumentEditor<br/>+ useDocument (tab 1)"]
       ed2["DocumentEditor<br/>+ useDocument (tab 2)"]
     end
@@ -36,6 +34,7 @@ flowchart LR
   idx --> docs
   idx --> menu
   idx --> proto
+  docs --> reg
   docs --> fio
   docs --> rec
   docs --> finder
@@ -52,15 +51,15 @@ flowchart LR
 
 ### Who owns what
 
-| State | Owner |
-|---|---|
-| Which docs exist, which window each lives in | Main |
-| Each doc's path, dirty and empty flags | Main (renderer reports dirty/empty) |
-| Window title, proxy icon, close-button dot | Main (from the active doc) |
-| Disk writes, dialogs, recovery journal | Main |
-| Tab order, active tab, tab-strip UI | Renderer |
+| State                                             | Owner                                       |
+| ------------------------------------------------- | ------------------------------------------- |
+| Which docs exist, which window each lives in      | Main                                        |
+| Each doc's path, dirty and empty flags            | Main (renderer reports dirty/empty)         |
+| Window title, proxy icon, close-button dot        | Main (from the active doc)                  |
+| Disk writes, dialogs, recovery journal            | Main                                        |
+| Tab order, active tab, tab-strip UI               | Renderer                                    |
 | Scene contents, undo history, Excalidraw UI state | Renderer (`DocumentEditor` / `useDocument`) |
-| Theme preference, shape library | Renderer (`localStorage`, never scene data) |
+| Theme preference, shape library                   | Renderer (`localStorage`, never scene data) |
 
 ### Windows and tabs
 
@@ -71,16 +70,21 @@ flowchart LR
 - The window is frameless (`titleBarStyle: 'hidden'`) with the traffic lights inside a 40px
   tab strip that doubles as the drag region. See [ADR 0007](adr/0007-frameless-window-custom-tab-strip.md).
 
-| Shortcut | Action |
-|---|---|
-| ⌘T | New tab |
-| ⌘N | New window |
-| ⌘O | Open (into the current window as tabs) |
-| ⌘S / ⇧⌘S | Save / Save As |
-| ⌘W | Close tab |
-| ⇧⌘W | Close window |
-| ⌘1–⌘9 | Switch to tab N |
-| ⌃Tab / ⌃⇧Tab (also ⇧⌘] / ⇧⌘[) | Next / previous tab |
+| Shortcut                      | Action                                 | Handled by                       |
+| ----------------------------- | -------------------------------------- | -------------------------------- |
+| ⌘T                            | New tab                                | Main (menu)                      |
+| ⌘N                            | New window                             | Main (menu)                      |
+| ⌘O                            | Open (into the current window as tabs) | Main (menu)                      |
+| ⌘S / ⇧⌘S                      | Save / Save As                         | Menu → `onMenu` → active tab     |
+| ⇧⌘E                           | Export image                           | Menu → `onMenu` → active tab     |
+| ⌘W                            | Close tab                              | Menu → `onMenu` → close-tab flow |
+| ⇧⌘W                           | Close window                           | Main (menu)                      |
+| ⌘1–⌘8, ⌘9                     | Switch to tab N; ⌘9 is the last tab    | Renderer (`shortcuts.ts`)        |
+| ⌃Tab / ⌃⇧Tab (also ⇧⌘] / ⇧⌘[) | Next / previous tab                    | Menu → `onMenu` → renderer       |
+
+Excalidraw binds some of the same keys. The renderer stops them from reaching Excalidraw
+without cancelling them, so the menu accelerator still fires; see `src/renderer/src/shortcuts.ts`
+and the gotchas in [AGENTS.md](../AGENTS.md).
 
 ### Security boundaries
 
@@ -220,6 +224,23 @@ sequenceDiagram
 
 Corrupt journals are moved to `userData/recovery/corrupt/` so they never block startup.
 See [ADR 0005](adr/0005-recovery-journal.md).
+
+## Known fragile spots
+
+- **`src/renderer/src/portalGuard.ts`.** Excalidraw 0.18 keeps some UI state (notably the
+  confirm dialog behind "Clear canvas") in a module-level jotai store shared by every
+  `<Excalidraw>` on the page. Opening that dialog in one tab renders a modal portal on
+  `<body>` for _every_ mounted editor, and confirming the wrong one would clear a hidden
+  drawing. The guard finds each portal's owner by walking React's internal fiber
+  (`__reactFiber$…`) up to the `.sketchbook-editor[data-doc-id]` wrapper and hides portals of
+  inactive editors. It relies on React internals, so it can break on a React or Excalidraw
+  upgrade. It fails safe: a portal whose owner can't be found stays visible, which is the
+  behaviour without the guard.
+- **Build-time patches to Excalidraw** in `electron.vite.config.ts` (CDN font fallback,
+  embind `new Function`, subset-worker chunk). They throw and fail the build if Excalidraw's
+  code changes shape.
+
+Both are on the checklist in [upgrading-excalidraw.md](upgrading-excalidraw.md).
 
 ## Further reading
 

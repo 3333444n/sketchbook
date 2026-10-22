@@ -17,13 +17,13 @@ renderer reaches it through [`src/renderer/src/bridge.ts`](../src/renderer/src/b
 
 ## Types
 
-| Type | Shape | Notes |
-|---|---|---|
-| `DocPayload` | `{ docId, path, contents, recovered? }` | `path` is absolute or `null` (untitled). `contents` is `null` for a new drawing; `.png` arrives as a `data:image/png;base64,...` string, everything else as UTF-8 text. `recovered` is true for docs restored from the journal. |
-| `MenuAction` | `'save' \| 'save-as' \| 'export-image' \| 'mermaid' \| 'close-tab' \| 'next-tab' \| 'prev-tab'` | Applies to the active tab. |
-| `SaveResult` | `{ path } \| null` | `null` when cancelled or failed (main already showed any error). |
-| `CloseDecision` | `'close' \| 'save' \| 'cancel'` | Answer to `requestCloseDoc`. |
-| `InitialState` | `{ docs, activeDocId, fullScreen }` | `docs` always has at least one entry. |
+| Type            | Shape                                                                                           | Notes                                                                                                                                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DocPayload`    | `{ docId, path, contents, recovered? }`                                                         | `path` is absolute or `null` (untitled). `contents` is `null` for a new drawing; `.png` arrives as a `data:image/png;base64,...` string, everything else as UTF-8 text. `recovered` is true for docs restored from the journal. |
+| `MenuAction`    | `'save' \| 'save-as' \| 'export-image' \| 'mermaid' \| 'close-tab' \| 'next-tab' \| 'prev-tab'` | Applies to the active tab.                                                                                                                                                                                                      |
+| `SaveResult`    | `{ path } \| null`                                                                              | `null` when cancelled or failed (main already showed any error).                                                                                                                                                                |
+| `CloseDecision` | `'close' \| 'save' \| 'cancel'`                                                                 | Answer to `requestCloseDoc`.                                                                                                                                                                                                    |
+| `InitialState`  | `{ docs, activeDocId, fullScreen }`                                                             | `docs` always has at least one entry.                                                                                                                                                                                           |
 
 ## Channels
 
@@ -32,56 +32,57 @@ promise (`ipcRenderer.invoke` / `ipcMain.handle`); "send" is fire-and-forget.
 
 ### Window-level
 
-| API | Channel | Kind | Purpose |
-|---|---|---|---|
-| `getInitialState()` | `win:get-initial-state` | R→M invoke | Tabs to show at startup, which is active, and whether the window is full screen. Recovered docs arrive here with `recovered: true`. |
-| `onOpenDocs(cb)` | `win:open-docs` | M→R | Add `docs` as tabs and activate `activeDocId`. If a payload's `docId` matches an existing tab, **replace** that tab's document (main does this when opening a file into a pristine untitled tab). |
-| `onActivateDoc(cb)` | `win:activate-doc` | M→R | Switch to an existing tab (file already open, or main is about to prompt about it). |
-| `onSaveAndClose(cb)` | `win:save-and-close` | M→R | The user chose Save in main's close-window/quit prompt. Save the doc (not Save As); main finishes the close when the save succeeds. |
-| `onMenu(cb)` | `win:menu-action` | M→R | A native menu action for the active tab. |
-| `onFullScreenChange(cb)` | `win:full-screen` | M→R | Full screen toggled; the tab strip drops its traffic-light inset while full screen. |
-| `open()` | `win:open` | R→M send | Show the native Open dialog; results open as tabs in this window. |
-| `newTab()` | `win:new-tab` | R→M send | Ask for a new untitled tab; it arrives via `onOpenDocs`. |
-| `newWindow()` | `win:new-window` | R→M send | Open a new window with one untitled tab. |
-| `openExternal(url)` | `shell:open-external` | R→M send | Open an `http:`, `https:` or `mailto:` URL in the system browser. Anything else is ignored. |
+| API                      | Channel                 | Kind       | Purpose                                                                                                                                                                                           |
+| ------------------------ | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getInitialState()`      | `win:get-initial-state` | R→M invoke | Tabs to show at startup, which is active, and whether the window is full screen. Recovered docs arrive here with `recovered: true`.                                                               |
+| `onOpenDocs(cb)`         | `win:open-docs`         | M→R        | Add `docs` as tabs and activate `activeDocId`. If a payload's `docId` matches an existing tab, **replace** that tab's document (main does this when opening a file into a pristine untitled tab). |
+| `onActivateDoc(cb)`      | `win:activate-doc`      | M→R        | Switch to an existing tab (file already open, or main is about to prompt about it).                                                                                                               |
+| `onSaveAndClose(cb)`     | `win:save-and-close`    | M→R        | The user chose Save in main's close-window/quit prompt. Save the doc (not Save As); main finishes the close when the save succeeds.                                                               |
+| `onMenu(cb)`             | `win:menu-action`       | M→R        | A native menu action for the active tab.                                                                                                                                                          |
+| `onFullScreenChange(cb)` | `win:full-screen`       | M→R        | Full screen toggled; the tab strip drops its traffic-light inset while full screen.                                                                                                               |
+| `open()`                 | `win:open`              | R→M send   | Show the native Open dialog; results open as tabs in this window.                                                                                                                                 |
+| `newTab()`               | `win:new-tab`           | R→M send   | Ask for a new untitled tab; it arrives via `onOpenDocs`.                                                                                                                                          |
+| `newWindow()`            | `win:new-window`        | R→M send   | Open a new window with one untitled tab.                                                                                                                                                          |
+| `openExternal(url)`      | `shell:open-external`   | R→M send   | Open an `http:`, `https:` or `mailto:` URL in the system browser. Anything else is ignored.                                                                                                       |
 
 ### Per-document
 
 Every per-document call carries a `docId`. Main ignores calls whose `docId` doesn't belong to
 the sending window.
 
-| API | Channel | Kind | Purpose |
-|---|---|---|---|
-| `setActiveDoc(docId)` | `doc:set-active` | R→M send | Report the active tab. Drives the window title, proxy icon, edited dot and which doc menu actions target. |
-| `save(docId, contents, { saveAs })` | `doc:save` | R→M invoke | Save. Main writes to the doc's tracked path if it is a native `.excalidraw` file and `saveAs` is false; otherwise it shows a Save dialog. Writes are atomic. Resolves `{ path }` or `null`. |
-| `setDirty(docId, dirty)` | `doc:set-dirty` | R→M send | Unsaved-changes state (renderer compares scene versions against the last save). |
-| `setEmpty(docId, empty)` | `doc:set-empty` | R→M send | Whether the canvas has no elements, so main can reuse a pristine tab when opening a file. |
-| `autosave(docId, contents)` | `doc:autosave` | R→M send | Write the scene to the recovery journal. The renderer debounces (1 s); main ignores it for clean docs. |
-| `requestCloseDoc(docId)` | `doc:request-close` | R→M invoke | Ask whether the tab may close. Main prompts if dirty and returns a `CloseDecision`. |
-| `docClosed(docId)` | `doc:closed` | R→M send | The tab is gone from the UI. Main forgets the doc and deletes its journal; if it was the window's last tab, main closes the window. |
+| API                                 | Channel             | Kind       | Purpose                                                                                                                                                                                     |
+| ----------------------------------- | ------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setActiveDoc(docId)`               | `doc:set-active`    | R→M send   | Report the active tab. Drives the window title, proxy icon, edited dot and which doc menu actions target.                                                                                   |
+| `save(docId, contents, { saveAs })` | `doc:save`          | R→M invoke | Save. Main writes to the doc's tracked path if it is a native `.excalidraw` file and `saveAs` is false; otherwise it shows a Save dialog. Writes are atomic. Resolves `{ path }` or `null`. |
+| `setDirty(docId, dirty)`            | `doc:set-dirty`     | R→M send   | Unsaved-changes state (renderer compares scene versions against the last save).                                                                                                             |
+| `setEmpty(docId, empty)`            | `doc:set-empty`     | R→M send   | Whether the canvas has no elements, so main can reuse a pristine tab when opening a file.                                                                                                   |
+| `autosave(docId, contents)`         | `doc:autosave`      | R→M send   | Write the scene to the recovery journal. The renderer debounces (1 s); main ignores it for clean docs.                                                                                      |
+| `requestCloseDoc(docId)`            | `doc:request-close` | R→M invoke | Ask whether the tab may close. Main prompts if dirty and returns a `CloseDecision`.                                                                                                         |
+| `docClosed(docId)`                  | `doc:closed`        | R→M send   | The tab is gone from the UI. Main forgets the doc and deletes its journal; if it was the window's last tab, main closes the window.                                                         |
 
 ## Handling a `CloseDecision`
 
-| Decision | Renderer does |
-|---|---|
-| `'close'` | Remove the tab now, then call `docClosed(docId)`. |
-| `'save'` | Call `save(docId, ...)`. On success remove the tab and call `docClosed`. On `null`, keep the tab. |
-| `'cancel'` | Keep the tab. |
+| Decision   | Renderer does                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| `'close'`  | Remove the tab now, then call `docClosed(docId)`.                                                 |
+| `'save'`   | Call `save(docId, ...)`. On success remove the tab and call `docClosed`. On `null`, keep the tab. |
+| `'cancel'` | Keep the tab.                                                                                     |
 
 ## Menu actions
 
-| Action | Accelerator | Renderer does |
-|---|---|---|
-| `save` | ⌘S | Save the active doc. |
-| `save-as` | ⇧⌘S | Save the active doc with `saveAs: true`. |
-| `export-image` | ⇧⌘E | Open Excalidraw's image export dialog. The file is saved via `<a download>` → main's `will-download` → native Save dialog. |
-| `mermaid` | (menu only) | Open the Mermaid-to-diagram dialog. |
-| `close-tab` | ⌘W | Run the close-tab flow above. |
-| `next-tab` | ⌃Tab, ⇧⌘] | Activate the next tab. |
-| `prev-tab` | ⌃⇧Tab, ⇧⌘[ | Activate the previous tab. |
+| Action         | Accelerator | Renderer does                                                                                                              |
+| -------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `save`         | ⌘S          | Save the active doc.                                                                                                       |
+| `save-as`      | ⇧⌘S         | Save the active doc with `saveAs: true`.                                                                                   |
+| `export-image` | ⇧⌘E         | Open Excalidraw's image export dialog. The file is saved via `<a download>` → main's `will-download` → native Save dialog. |
+| `mermaid`      | (menu only) | Open the Mermaid-to-diagram dialog.                                                                                        |
+| `close-tab`    | ⌘W          | Run the close-tab flow above.                                                                                              |
+| `next-tab`     | ⌃Tab, ⇧⌘]   | Activate the next tab.                                                                                                     |
+| `prev-tab`     | ⌃⇧Tab, ⇧⌘[  | Activate the previous tab.                                                                                                 |
 
 New tab (⌘T), new window (⌘N), Open (⌘O) and close window (⇧⌘W) are handled in main
-directly. Tab switching with ⌘1–⌘9 is handled by the renderer.
+directly. Tab switching with ⌘1–⌘9 is handled by the renderer (⌘9 selects the last tab) and
+never reaches main.
 
 ## Changing the contract
 

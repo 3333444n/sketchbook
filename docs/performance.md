@@ -13,11 +13,11 @@ Decision record: [ADR 0006](adr/0006-tabs-with-mru-editor-budget.md).
   editor's scene is snapshotted to JSON (`serializeAsJSON`) and kept in memory. Activating the
   tab remounts an editor from that snapshot.
 
-| Tab state | Excalidraw mounted | Switch cost | Undo history |
-|---|---|---|---|
-| Active | yes, visible | n/a | kept |
-| Recent (top 5 MRU) | yes, hidden | instant | kept |
-| Evicted | no, JSON snapshot | remount (parse + first render) | **lost** |
+| Tab state          | Excalidraw mounted | Switch cost                    | Undo history |
+| ------------------ | ------------------ | ------------------------------ | ------------ |
+| Active             | yes, visible       | n/a                            | kept         |
+| Recent (top 5 MRU) | yes, hidden        | instant                        | kept         |
+| Evicted            | no, JSON snapshot  | remount (parse + first render) | **lost**     |
 
 Dirty state, path and the recovery journal are unaffected by eviction: main owns them, and
 the snapshot carries the latest scene.
@@ -28,6 +28,23 @@ Each mounted editor holds its own scene, caches, canvases and React tree. Mounti
 tab makes memory and change-handling cost grow with the tab count. One process per tab is
 far heavier still (100+ MB each). Five keeps switching between the tabs you're actually using
 instant, while bounding memory. It's a constant; change it only with measurements.
+
+## Measured
+
+Production build (v1.0.0) on Apple Silicon, one window, 8 documents of 300 shapes each, heap
+read after a forced GC:
+
+| Scenario                                         | Result         |
+| ------------------------------------------------ | -------------- |
+| JS heap, 1 tab open                              | 14 MB          |
+| JS heap, 8 tabs open (5 mounted, 3 evicted)      | 19 MB          |
+| Switch to a mounted (hidden) tab                 | about 25–33 ms |
+| Switch to an evicted tab (remount from snapshot) | about 33 ms    |
+
+Switch times run from the click until two `requestAnimationFrame` callbacks have fired, so
+they include the first painted frame. Eight tabs cost about 5 MB of heap over one, and an
+evicted tab comes back about as fast as a mounted one at this drawing size; the budget is
+there to bound memory as tab counts and drawings grow.
 
 ## Rules for contributors
 
