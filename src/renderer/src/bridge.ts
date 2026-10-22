@@ -1,26 +1,40 @@
-// Thin adapter over `window.sketchbook` (the preload IPC API).
-//
-// Every per-document call already takes the docId, even though today's contract is
-// one document per window and ignores it. When the contract gains per-tab calls,
-// only this file needs to change.
+// Thin adapter over `window.sketchbook` (the preload IPC API, contract v2: tabs).
+// The rest of the renderer talks to main only through this object.
 
-import type { DocPayload, MenuAction, SaveResult } from '../../shared/ipc'
+import type {
+  CloseDecision,
+  DocPayload,
+  InitialState,
+  MenuAction,
+  SaveResult
+} from '../../shared/ipc'
 
 const api = (): Window['sketchbook'] => window.sketchbook
 
+type Unsubscribe = () => void
+
 export const bridge = {
   // ---- window-level ----
-  getInitialDoc: (): Promise<DocPayload> => api().getInitialDoc(),
-  onLoadDoc: (cb: (doc: DocPayload) => void): (() => void) => api().onLoadDoc(cb),
-  onMenu: (cb: (action: MenuAction) => void): (() => void) => api().onMenu(cb),
+  getInitialState: (): Promise<InitialState> => api().getInitialState(),
+  onOpenDocs: (cb: (docs: DocPayload[], activeDocId: string) => void): Unsubscribe =>
+    api().onOpenDocs(cb),
+  onActivateDoc: (cb: (docId: string) => void): Unsubscribe => api().onActivateDoc(cb),
+  onSaveAndClose: (cb: (docId: string) => void): Unsubscribe => api().onSaveAndClose(cb),
+  onMenu: (cb: (action: MenuAction) => void): Unsubscribe => api().onMenu(cb),
+  onFullScreenChange: (cb: (fullScreen: boolean) => void): Unsubscribe =>
+    api().onFullScreenChange(cb),
   open: (): void => api().open(),
+  newTab: (): void => api().newTab(),
   newWindow: (): void => api().newWindow(),
   openExternal: (url: string): void => api().openExternal(url),
 
   // ---- per-document ----
-  save: (_docId: string, contents: string, opts: { saveAs: boolean }): Promise<SaveResult> =>
-    api().save(contents, opts),
-  setDirty: (_docId: string, dirty: boolean): void => api().setDirty(dirty),
-  setEmpty: (_docId: string, empty: boolean): void => api().setEmpty(empty),
-  autosave: (_docId: string, contents: string): void => api().autosave(contents)
+  setActiveDoc: (docId: string): void => api().setActiveDoc(docId),
+  save: (docId: string, contents: string, opts: { saveAs: boolean }): Promise<SaveResult> =>
+    api().save(docId, contents, opts),
+  setDirty: (docId: string, dirty: boolean): void => api().setDirty(docId, dirty),
+  setEmpty: (docId: string, empty: boolean): void => api().setEmpty(docId, empty),
+  autosave: (docId: string, contents: string): void => api().autosave(docId, contents),
+  requestCloseDoc: (docId: string): Promise<CloseDecision> => api().requestCloseDoc(docId),
+  docClosed: (docId: string): void => api().docClosed(docId)
 }

@@ -11,6 +11,285 @@ body,
   inset: 0;
 }
 
+/* ---- editors ------------------------------------------------------------- */
+
+.sketchbook-editors {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* `top` is set inline to TAB_STRIP_HEIGHT. */
+}
+
+/* Every mounted editor fills the area; inactive ones keep their size (so their
+   canvas is correct the moment they are shown) but are invisible and inert. */
+.sketchbook-editor {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sketchbook-editor--active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* ---- tab strip / title bar ------------------------------------------------ */
+
+.sketchbook-tabstrip {
+  /* Excalidraw palette (light). */
+  --tab-text: #1b1b1f;
+  --tab-text-muted: #5c5c5c;
+  --tab-hover-bg: rgba(0, 0, 0, 0.05);
+  --tab-active-bg: #ffffff;
+  --tab-active-shadow:
+    0 0 0.93px 0 rgba(0, 0, 0, 0.17), 0 0 3.13px 0 rgba(0, 0, 0, 0.08),
+    0 3px 7px 0 rgba(0, 0, 0, 0.05);
+  --tab-dot: #6965db;
+  --tab-close-hover-bg: rgba(0, 0, 0, 0.08);
+  --tab-drop: #6965db;
+  --tab-bg-filter: none;
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  font-family:
+    Assistant,
+    system-ui,
+    BlinkMacSystemFont,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-size: 13px;
+  color: var(--tab-text);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+  /* No bottom border: strip and canvas are one surface. */
+}
+
+.sketchbook-tabstrip--dark {
+  /* Excalidraw palette (dark). */
+  --tab-text: #e3e3e8;
+  --tab-text-muted: #b8b8b8;
+  --tab-hover-bg: rgba(255, 255, 255, 0.06);
+  --tab-active-bg: #232329;
+  --tab-active-shadow: 0 0 0.93px 0 rgba(0, 0, 0, 0.5), 0 3px 7px 0 rgba(0, 0, 0, 0.25);
+  --tab-dot: #a8a5ff;
+  --tab-close-hover-bg: rgba(255, 255, 255, 0.1);
+  --tab-drop: #a8a5ff;
+  /* Same filter Excalidraw applies to its canvas in dark mode, so the strip's
+     background renders exactly like the canvas' viewBackgroundColor. */
+  --tab-bg-filter: invert(93%) hue-rotate(180deg);
+}
+
+.sketchbook-tabstrip__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  filter: var(--tab-bg-filter);
+}
+
+.sketchbook-tabstrip__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* Room for the active tab's shadow. */
+  padding: 0 4px;
+}
+
+.sketchbook-tabstrip__tabs[data-fade-start='true'] {
+  mask-image: linear-gradient(to right, transparent 0, #000 24px);
+}
+
+.sketchbook-tabstrip__tabs[data-fade-end='true'] {
+  mask-image: linear-gradient(to left, transparent 0, #000 24px);
+}
+
+.sketchbook-tabstrip__tabs[data-fade-start='true'][data-fade-end='true'] {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+.sketchbook-tabstrip__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.sketchbook-tabstrip__drag {
+  flex: 1 1 0;
+  align-self: stretch;
+  min-width: 24px;
+}
+
+.sketchbook-tab,
+.sketchbook-tabstrip__new {
+  -webkit-app-region: no-drag;
+}
+
+.sketchbook-tab {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 180px;
+  height: 28px;
+  padding: 0 4px 0 12px;
+  border-radius: 8px;
+  color: var(--tab-text-muted);
+  cursor: default;
+  transition: background-color 0.12s ease;
+}
+
+.sketchbook-tab:hover {
+  background: var(--tab-hover-bg);
+}
+
+.sketchbook-tab--active,
+.sketchbook-tab--active:hover {
+  color: var(--tab-text);
+  background: var(--tab-active-bg);
+  box-shadow: var(--tab-active-shadow);
+}
+
+.sketchbook-tab--dragging {
+  opacity: 0.5;
+}
+
+.sketchbook-tab--drop-before::before,
+.sketchbook-tab--drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--tab-drop);
+}
+
+.sketchbook-tab--drop-before::before {
+  left: -3px;
+}
+
+.sketchbook-tab--drop-after::after {
+  right: -3px;
+}
+
+.sketchbook-tab__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.sketchbook-tab__close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  cursor: default;
+}
+
+.sketchbook-tab__close:hover {
+  background: var(--tab-close-hover-bg);
+}
+
+.sketchbook-tab__close > * {
+  grid-area: 1 / 1;
+}
+
+.sketchbook-tab__x {
+  width: 14px;
+  height: 14px;
+  /* Visible on the active tab and on hover (VS Code style). */
+  visibility: hidden;
+}
+
+.sketchbook-tab--active .sketchbook-tab__x,
+.sketchbook-tab:hover .sketchbook-tab__x {
+  visibility: visible;
+}
+
+.sketchbook-tab__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tab-dot);
+  visibility: hidden;
+}
+
+/* Dirty: a dot instead of the ✕, turning back into ✕ while hovering the button. */
+.sketchbook-tab--dirty .sketchbook-tab__dot {
+  visibility: visible;
+}
+
+.sketchbook-tab--dirty .sketchbook-tab__x,
+.sketchbook-tab--dirty.sketchbook-tab--active .sketchbook-tab__x {
+  visibility: hidden;
+}
+
+.sketchbook-tab--dirty .sketchbook-tab__close:hover .sketchbook-tab__dot {
+  visibility: hidden;
+}
+
+.sketchbook-tab--dirty .sketchbook-tab__close:hover .sketchbook-tab__x {
+  visibility: visible;
+}
+
+.sketchbook-tabstrip__new {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--tab-text-muted);
+  cursor: default;
+}
+
+.sketchbook-tabstrip__new:hover {
+  background: var(--tab-hover-bg);
+  color: var(--tab-text);
+}
+
+.sketchbook-tabstrip__new svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* Welcome screen wordmark (replaces the Excalidraw logo). Inherits the hand-drawn
    font and logo colour from .welcome-screen-center__logo. */
 .sketchbook-wordmark {

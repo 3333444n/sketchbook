@@ -84,6 +84,15 @@ export async function launchApp(
         .evaluate(() => (globalThis as unknown as { __sbRequests: string[] }).__sbRequests)
         .catch(() => [] as string[])
       requests.push(...mainSeen)
+      // Tests leave drawings dirty: answer main's "save changes?" prompts with
+      // "Don't Save" so quitting doesn't block on a native dialog.
+      await app
+        .evaluate(({ dialog }) => {
+          const dontSave = { response: 1, checkboxChecked: false }
+          dialog.showMessageBox = (async () => dontSave) as unknown as typeof dialog.showMessageBox
+          dialog.showMessageBoxSync = (() => 1) as unknown as typeof dialog.showMessageBoxSync
+        })
+        .catch(() => undefined)
       await app.close().catch(() => undefined)
       if (ownsUserData) rmSync(userData, { recursive: true, force: true })
     }

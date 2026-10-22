@@ -17,6 +17,11 @@ export function loadLibrary(): LibraryItems {
   }
 }
 
-export function saveLibrary(items: LibraryItems): void {
-  writeStorage(LIBRARY_KEY, serializeLibraryAsJSON(items))
+export function serializeLibrary(items: LibraryItems): string {
+  return serializeLibraryAsJSON(items)
+}
+
+/** Persist an already-serialized library (see `serializeLibrary`). */
+export function saveLibraryJSON(json: string): void {
+  writeStorage(LIBRARY_KEY, json)
 }
