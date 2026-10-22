@@ -114,6 +114,24 @@ body,
   padding: 0 4px;
 }
 
+.sketchbook-tabstrip__tabs[data-fade-start='true'] {
+  mask-image: linear-gradient(to right, transparent 0, #000 24px);
+}
+
+.sketchbook-tabstrip__tabs[data-fade-end='true'] {
+  mask-image: linear-gradient(to left, transparent 0, #000 24px);
+}
+
+.sketchbook-tabstrip__tabs[data-fade-start='true'][data-fade-end='true'] {
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
 .sketchbook-tabstrip__tabs::-webkit-scrollbar {
   display: none;
 }

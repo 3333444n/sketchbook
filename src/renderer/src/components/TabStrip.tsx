@@ -74,6 +74,25 @@ export const TabStrip = memo(function TabStrip({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Fade the edges that have tabs scrolled out of view (set on the DOM directly:
+  // scrolling must not re-render the strip).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = (): void => {
+      el.dataset.fadeStart = String(el.scrollLeft > 1)
+      el.dataset.fadeEnd = String(el.scrollLeft + el.clientWidth < el.scrollWidth - 1)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    el.addEventListener('scroll', update, { passive: true })
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('scroll', update)
+    }
+  }, [tabs.length])
+
   const endDrag = (): void => {
     setDragId(null)
     setDropHint(null)
