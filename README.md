@@ -103,6 +103,13 @@ xattr -cr /Applications/Sketchbook.app
   tabs the next time you open Sketchbook.
 - **No internet needed.** Sketchbook never connects to the network.
 
+### Updating
+
+Sketchbook doesn't update itself (it never goes online). To get a new version, download the
+latest dmg from [Releases](https://github.com/3333444n/sketchbook/releases/latest) and drag
+Sketchbook to Applications again, choosing **Replace**. Your drawings and settings are kept.
+To hear about new versions, click **Watch → Custom → Releases** on the GitHub page.
+
 ### Uninstall
 
 Drag **Sketchbook** from **Applications** to the Trash. Your drawings stay where you saved

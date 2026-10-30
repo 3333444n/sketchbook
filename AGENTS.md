@@ -13,6 +13,12 @@ links, AI and online library browsing are out of scope.
 Stack: Electron 44.9.3, electron-vite 6, React 19, TypeScript, pnpm, Node 24,
 electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
 
+## Status
+
+v1.0.0 is released (2026-10-22, <https://github.com/3333444n/sketchbook/releases/tag/v1.0.0>).
+There is no auto-update or update check. What's verified, what isn't, and candidate next
+steps (update mechanism, signing, CI coverage): [docs/roadmap.md](docs/roadmap.md).
+
 ## Repo map
 
 | Path                                  | What                                                                                                                   |
@@ -24,7 +30,7 @@ electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
 | `src/main/protocol.ts`                | `app://bundle/` scheme and renderer loading.                                                                           |
 | `src/main/documents.ts`               | Windows, open/save, close/quit prompts, IPC handlers, link policy.                                                     |
 | `src/main/registry.ts`                | Pure window/doc registry (which docs live in which window, paths, dirty, active). No `electron` import.                |
-| `src/main/fileio.ts`                  | Pure file helpers: `atomicWrite`, extensions, `readDocContents`. No `electron` import.                                 |
+| `src/main/fileio.ts`                  | Pure file helpers: `atomicWrite`, extensions, titles, `sanitizeFileName`, `readDocContents`. No `electron` import.     |
 | `src/main/recovery.ts`                | Crash-recovery journal in `userData/recovery/`. No `electron` import.                                                  |
 | `src/main/finder.ts`                  | Single-instance lock, `open-file`, argv paths.                                                                         |
 | `src/main/downloads.ts`               | `will-download` → native Save dialog (image export, library export).                                                   |
@@ -39,7 +45,7 @@ electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
 | `src/renderer/src/bridge.ts`          | Thin adapter over `window.sketchbook`.                                                                                 |
 | `src/renderer/src/shortcuts.ts`       | Capture-phase key handlers: yield menu-owned keys to the native menu, ⌘1–⌘9, stray-key forwarding.                     |
 | `src/renderer/src/portalGuard.ts`     | Hides dialog portals that belong to hidden editors (see Gotchas).                                                      |
-| `src/renderer/src/components/`        | `TabStrip`, `AppMainMenu`, `AppWelcomeScreen`, icons.                                                                  |
+| `src/renderer/src/components/`        | `TabStrip` (incl. double-click rename), `AppMainMenu`, `AppWelcomeScreen`, icons.                                      |
 | `electron.vite.config.ts`             | Build, including the Excalidraw offline patches (see Gotchas).                                                         |
 | `electron-builder.yml`                | Packaging (ad-hoc-signed arm64 dmg, `.excalidraw` file association).                                                   |
 | `tests/e2e/`, `playwright.config.ts`  | Playwright `_electron` tests against the production build.                                                             |
@@ -81,6 +87,8 @@ Details: [docs/architecture.md](docs/architecture.md), [docs/ipc-contract.md](do
    fetches. The app must work with Wi-Fi off. See [docs/offline.md](docs/offline.md).
 2. **Never write to a renderer-supplied path.** Main writes only to paths it got from its own
    dialog or already tracks for that doc. The renderer sends contents and a `docId`, never a path.
+   The only renderer text that reaches a path is a tab rename: main runs it through
+   `sanitizeFileName` and keeps the doc's folder and extension.
 3. **Contract first.** To change IPC, edit `src/shared/ipc.ts` first, then update preload, main
    and renderer in the same change. Keep [docs/ipc-contract.md](docs/ipc-contract.md) in sync.
 4. **Validate every IPC message in main**: look up the sender's window, check the `docId`
@@ -145,6 +153,6 @@ Details: [docs/architecture.md](docs/architecture.md), [docs/ipc-contract.md](do
 2. `pnpm test`
 3. `pnpm test:e2e`: builds, then runs the production app with an isolated profile; any
    non-local request or CSP violation fails the offline spec.
-4. For UI changes, run `pnpm dev` and exercise the flow: open, edit, ⌘S, close a dirty tab,
-   switch between more than 5 tabs.
+4. For UI changes, run `pnpm dev` and exercise the flow: open, edit, ⌘S, rename a tab, close a
+   dirty tab, switch between more than 5 tabs.
 5. State in your summary what you verified and what you didn't.

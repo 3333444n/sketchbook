@@ -10,7 +10,7 @@
 
 - Config: [`vitest.config.ts`](../vitest.config.ts). Environment is plain Node.
 - Current suites: [`src/main/__tests__/fileio.test.ts`](../src/main/__tests__/fileio.test.ts)
-  (atomic writes, extensions),
+  (atomic writes, extensions, titles, file-name sanitising),
   [`src/main/__tests__/recovery.test.ts`](../src/main/__tests__/recovery.test.ts) (journal
   write, delete, scan, corrupt handling) and
   [`src/main/__tests__/registry.test.ts`](../src/main/__tests__/registry.test.ts) (docs per
@@ -35,12 +35,12 @@ E2E tests launch the **production build** (`out/main/index.js`) with Playwright'
 - `nonLocal(urls)` lists anything that isn't `app:`, `data:`, `blob:`, `devtools:` or a bundled
   `file:` read.
 
-| Spec               | Covers                                                                                                                                                                                         |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `offline.spec.ts`  | Served from `app://bundle/` with `boot.js` applied; every font, Mermaid and PNG/SVG export with no network and no CSP violation; main blocks remote requests; `app://` refuses path traversal. |
-| `document.spec.ts` | Save, then reopen from argv round-trips the drawing; files from argv open as tabs and closing one leaves the other.                                                                            |
-| `export.spec.ts`   | PNG export goes through the native Save dialog and writes a valid PNG.                                                                                                                         |
-| `packaged.spec.ts` | Smoke test of `dist/mac-arm64/Sketchbook.app` (skipped unless `pnpm build:mac` has run).                                                                                                       |
+| Spec               | Covers                                                                                                                                                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `offline.spec.ts`  | Served from `app://bundle/` with `boot.js` applied; every font, Mermaid and PNG/SVG export with no network and no CSP violation; main blocks remote requests; `app://` refuses path traversal.                                    |
+| `document.spec.ts` | Save, then reopen from argv round-trips the drawing; files from argv open as tabs and closing one leaves the other; double-click renaming of saved (file renamed on disk, taken names refused, Escape cancels) and untitled tabs. |
+| `export.spec.ts`   | PNG export goes through the native Save dialog and writes a valid PNG.                                                                                                                                                            |
+| `packaged.spec.ts` | Smoke test of `dist/mac-arm64/Sketchbook.app` (skipped unless `pnpm build:mac` has run).                                                                                                                                          |
 
 `pnpm test:e2e` runs `electron-vite build` first. Set `SB_E2E_DEBUG=1` to echo renderer
 console output.
@@ -69,3 +69,6 @@ With Wi-Fi off, on the packaged app:
 5. Several tabs and two windows work at once.
 6. `kill -9` the app and relaunch: unsaved changes come back as dirty tabs.
 7. Closing a dirty tab, a dirty window, and quitting each show the save prompt.
+8. Double-click a saved tab's name, rename it, and check the file in Finder has the new name.
+9. Install over the previous version (drag to Applications, Replace) and check drawings and
+   settings survive.

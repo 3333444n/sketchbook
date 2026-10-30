@@ -22,9 +22,24 @@ pnpm build:mac     # typecheck, electron-vite build, electron-builder --mac
 3. CI ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) builds the dmg on tag pushes
    and uploads it as a workflow artifact. Alternatively build locally with `pnpm build:mac`.
 4. Create a GitHub Release for the tag, attach the dmg, and include the Gatekeeper
-   instructions below in the notes.
+   instructions below in the notes. The README's download link points at
+   `releases/latest`, so the newest release must have the dmg attached. For example:
 
-CI uses `--publish never`; nothing is uploaded automatically and there is no auto-update.
+   ```bash
+   gh release create vX.Y.Z dist/Sketchbook-X.Y.Z-arm64.dmg -R 3333444n/sketchbook \
+     --title "Sketchbook X.Y.Z" --notes-file notes.md
+   ```
+
+CI uses `--publish never`; nothing is uploaded automatically. v1.0.0 (2026-10-22) was released
+this way, with the dmg built locally.
+
+## Updates
+
+There is **no auto-update and no update check**. Users install a new version by downloading
+the new dmg and dragging Sketchbook to Applications again (Replace). Drawings are separate
+files and settings live in `~/Library/Application Support/sketchbook`, so both survive. The
+options for adding an update mechanism, and why true auto-update needs Developer ID signing,
+are in [roadmap.md](roadmap.md#updates).
 
 ## Installing an unsigned build (Gatekeeper)
 

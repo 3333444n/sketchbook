@@ -55,6 +55,7 @@ flowchart LR
 | ------------------------------------------------- | ------------------------------------------- |
 | Which docs exist, which window each lives in      | Main                                        |
 | Each doc's path, dirty and empty flags            | Main (renderer reports dirty/empty)         |
+| Name of a renamed untitled doc (`title`)          | Main (renderer mirrors it in its tab)       |
 | Window title, proxy icon, close-button dot        | Main (from the active doc)                  |
 | Disk writes, dialogs, recovery journal            | Main                                        |
 | Tab order, active tab, tab-strip UI               | Renderer                                    |
@@ -81,6 +82,7 @@ flowchart LR
 | ⇧⌘W                           | Close window                           | Main (menu)                      |
 | ⌘1–⌘8, ⌘9                     | Switch to tab N; ⌘9 is the last tab    | Renderer (`shortcuts.ts`)        |
 | ⌃Tab / ⌃⇧Tab (also ⇧⌘] / ⇧⌘[) | Next / previous tab                    | Menu → `onMenu` → renderer       |
+| Double-click a tab title      | Rename the drawing                     | Renderer → `renameDoc` → main    |
 
 Excalidraw binds some of the same keys. The renderer stops them from reaching Excalidraw
 without cancelling them, so the menu accelerator still fires; see `src/renderer/src/shortcuts.ts`
@@ -92,7 +94,9 @@ and the gotchas in [AGENTS.md](../AGENTS.md).
 - The preload exposes only `SketchbookAPI`. Main validates the sender and arguments of every
   message and only acts on `docId`s that belong to the sending window.
 - Main never writes to a path supplied by the renderer: only to a path it obtained from its own
-  dialog or already tracks for that doc.
+  dialog or already tracks for that doc. Rename is the one case where the renderer supplies
+  text that ends up in a path: main sanitises it (`sanitizeFileName`: no separators, colons or
+  control characters), keeps the folder and extension, and refuses names that are taken.
 - Navigation away from the app is blocked; `window.open` is denied. External links go through
   `shell.openExternal` for `http:`, `https:` and `mailto:` only.
 - Offline enforcement (CSP and `webRequest` block) is described in [offline.md](offline.md).
@@ -145,6 +149,32 @@ sequenceDiagram
   M-->>R: path (or null if cancelled or failed)
   R->>R: reset dirty baseline
 ```
+
+### Rename a tab (double-click its title)
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant R as Renderer (TabStrip)
+  participant M as Main
+  U->>R: double-click title, type, Enter (Escape cancels, blur commits)
+  R->>M: renameDoc(docId, name)
+  M->>M: sanitizeFileName(name), or return null if nothing is left
+  alt untitled doc
+    M->>M: title = name (tab title, default Save name)
+  else saved doc
+    alt name taken by another file or open doc
+      M->>U: warning, return null
+    else
+      M->>M: fs.rename in the same folder, keep extension, addRecentDocument
+    end
+  end
+  M->>M: update window title and proxy icon
+  M-->>R: path and title, or null
+  R->>R: update the tab (the scene is untouched)
+```
+
+The tab name is also passed to Excalidraw as `name`, so image exports default to it.
 
 ### Close a tab (Cmd+W)
 
