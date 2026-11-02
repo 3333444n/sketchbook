@@ -1,6 +1,6 @@
 {
   "name": "sketchbook",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sketchbook — an offline desktop whiteboard built with Excalidraw",
   "main": "./out/main/index.js",
   "author": "Luis Peregrino (https://github.com/3333444n)",

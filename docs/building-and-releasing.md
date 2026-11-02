@@ -58,8 +58,8 @@ Connections** and run the manual check in [testing.md](testing.md#manual-checkli
      --title "Sketchbook X.Y.Z" --notes-file notes.md
    ```
 
-CI uses `--publish never`; nothing is uploaded automatically. v1.0.0 (2026-10-22) was released
-this way, with the dmg built locally.
+CI uses `--publish never`; nothing is uploaded automatically. v1.0.0 (2026-10-22) and v1.1.0
+(2026-11-02) were released this way, with the dmg built locally.
 
 ## Updates
 

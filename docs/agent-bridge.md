@@ -6,8 +6,9 @@ you are looking at, and look at the result as an image. Everything stays on your
 agent talks to the app over a local socket, and Sketchbook still makes no network requests.
 Decision record: [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md).
 
-The bridge landed after v1.0.0: the v1.0.0 dmg on GitHub does not include it. Use the next
-release, or [build from source](building-and-releasing.md) (`pnpm build:mac`).
+The bridge requires v1.1.0 or later (the v1.0.0 dmg on GitHub does not include it). Download
+the [latest release](https://github.com/3333444n/sketchbook/releases/latest), or
+[build from source](building-and-releasing.md) (`pnpm build:mac`).
 
 ## User guide
 

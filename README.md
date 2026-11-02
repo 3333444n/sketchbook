@@ -173,7 +173,7 @@ your file until you press ⌘S.
 3. Ask: "Draw this repo's architecture in Sketchbook" or "Fix the overlapping boxes in my
    drawing and show me."
 
-The v1.0.0 download does not include this; it needs a newer release or a build from source.
+This requires v1.1.0 or later (the v1.0.0 download does not include it).
 
 The agent talks to the app over a local socket on your Mac; Sketchbook still makes no network
 requests. Config for Claude Desktop, Cursor and Codex, the tool reference and the security

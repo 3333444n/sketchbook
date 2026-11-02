@@ -2,6 +2,9 @@
 
 ## Where things stand
 
+- **v1.1.0** was released on 2026-11-02:
+  <https://github.com/3333444n/sketchbook/releases/tag/v1.1.0> (ad-hoc-signed arm64 dmg). It
+  adds the agent bridge below.
 - **v1.0.0** was released on 2026-10-22:
   <https://github.com/3333444n/sketchbook/releases/tag/v1.0.0> (ad-hoc-signed arm64 dmg).
 - Shipped: offline Excalidraw editor, real `.excalidraw` files, tabs (MRU budget of 5 mounted
@@ -11,15 +14,14 @@
 - Automated checks: typecheck, lint, Vitest unit tests and Playwright e2e (offline, documents,
   tabs, rename, export, packaged smoke test) all pass locally. CI runs typecheck, unit tests
   and the build, and packages the dmg on `v*` tags.
-- **The agent bridge** (after v1.0.0, not in the v1.0.0 dmg): an opt-in Unix socket plus a
+- **The agent bridge** (shipped in v1.1.0): an opt-in Unix socket plus a
   bundled MCP server so local agents (Claude Code, Claude Desktop, Cursor, Codex) can read and
   edit the open drawing and get a PNG back ([agent-bridge.md](agent-bridge.md),
   [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md)). Verified by unit tests on every
   side (settings, socket server, config snippets, scene helpers, MCP server and client), the
   e2e agent spec, the packaged MCP smoke test ([testing.md](testing.md)) and one manual
   Claude Code session against the app with all eight tools (a login mockup and a user flow
-  were drawn; it found the bound-label bug fixed in `update_elements`). It goes out with the
-  next release.
+  were drawn; it found the bound-label bug fixed in `update_elements`).
 
 ### Not verified by automation
 

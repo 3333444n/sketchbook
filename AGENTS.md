@@ -18,10 +18,10 @@ electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
 
 ## Status
 
-v1.0.0 is released (2026-10-22, <https://github.com/3333444n/sketchbook/releases/tag/v1.0.0>).
-There is no auto-update or update check. The agent bridge (opt-in Unix socket plus bundled
-MCP server) landed after v1.0.0 and is documented in
-[docs/agent-bridge.md](docs/agent-bridge.md). What's verified, what isn't, and candidate next
+v1.1.0 is released (2026-11-02, <https://github.com/3333444n/sketchbook/releases/tag/v1.1.0>).
+It adds the agent bridge (opt-in Unix socket plus bundled MCP server), documented in
+[docs/agent-bridge.md](docs/agent-bridge.md). v1.0.0 (2026-10-22) was the first release.
+There is no auto-update or update check. What's verified, what isn't, and candidate next
 steps (update mechanism, signing, CI coverage): [docs/roadmap.md](docs/roadmap.md).
 
 ## Repo map

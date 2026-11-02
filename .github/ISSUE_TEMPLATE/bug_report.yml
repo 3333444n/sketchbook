@@ -30,7 +30,7 @@ body:
     attributes:
       label: Sketchbook version
       description: Sketchbook → About Sketchbook
-      placeholder: 1.0.0
+      placeholder: 1.1.0
     validations:
       required: true
   - type: input
