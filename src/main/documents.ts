@@ -19,6 +19,7 @@ import { basename, dirname, extname, join } from 'path'
 import { randomUUID } from 'crypto'
 import {
   IPC,
+  type AgentRequest,
   type CloseDecision,
   type DocPayload,
   type InitialState,
@@ -26,6 +27,9 @@ import {
   type RenameResult,
   type SaveResult
 } from '../shared/ipc'
+import type { AgentDocInfo, AgentDocOp, AgentError } from '../shared/agent'
+import { agentError, isAgentError } from './agentServer'
+import { isAgentEnabled, setAgentEnabled, showAgentSetup } from './agent'
 import { TRAFFIC_LIGHT_POSITION } from '../shared/chrome'
 import { isAppUrl, loadRenderer } from './protocol'
 import {
@@ -105,6 +109,11 @@ function send(w: WinState<BrowserWindow>, channel: string, ...args: unknown[]): 
   if (!w.win.isDestroyed()) w.win.webContents.send(channel, ...args)
 }
 
+/** Push a window-level message to every open document window. */
+export function broadcast(channel: string, ...args: unknown[]): void {
+  for (const w of reg.windows.values()) send(w, channel, ...args)
+}
+
 // ---------------------------------------------------------------------------
 // Navigation / external links
 
@@ -129,7 +138,8 @@ function newPayload(p?: Partial<DocPayload>): DocPayload {
     docId: p?.docId ?? randomUUID(),
     path: p?.path ?? null,
     contents: p?.contents ?? null,
-    ...(p?.recovered ? { recovered: true } : {})
+    ...(p?.recovered ? { recovered: true } : {}),
+    ...(p?.title ? { title: p.title } : {})
   }
 }
 
@@ -196,6 +206,7 @@ export function createDocWindow(
   win.webContents.on('render-process-gone', () => {
     // A pending "Save and close" can never complete now; unblock close/quit.
     for (const d of reg.docsOf(wcId)) resolveSaveWaiter(d, false)
+    failPendingAgentRequests(wcId, agentError('INTERNAL', 'the window crashed'))
   })
 
   win.on('close', (e) => {
@@ -213,6 +224,7 @@ export function createDocWindow(
     }
     extra.delete(wcId)
     if (lastFocusedId === wcId) lastFocusedId = null
+    failPendingAgentRequests(wcId, agentError('NO_SUCH_DOC', 'the window was closed'))
   })
 
   void loadRenderer(win)
@@ -241,15 +253,28 @@ export function newUntitledWindow(): BrowserWindow {
   return createDocWindow()
 }
 
-/** New untitled tab in the focused window (or a new window when there is none). */
-export function newTab(target?: WinState<BrowserWindow>): void {
+/**
+ * New untitled tab in `target` or the focused window (or a new window when
+ * there is none). `title` names the untitled doc (already sanitized); `focus`
+ * (default true) raises the window — agent-created tabs pass false.
+ */
+export function newTab(
+  target?: WinState<BrowserWindow>,
+  opts: { focus?: boolean; title?: string } = {}
+): DocState {
+  const payload = newPayload({ title: opts.title })
   const w = target ?? activeWin()
   if (!w) {
-    newUntitledWindow()
-    return
+    const win = createDocWindow([{ payload }])
+    const d = reg.docOf(win.webContents.id, payload.docId)
+    if (!d) throw new Error('new window has no doc')
+    return d
   }
-  addDocsToWindow(w, [{ payload: newPayload() }])
-  focusWindow(w.win)
+  addDocsToWindow(w, [{ payload }])
+  if (opts.focus !== false) focusWindow(w.win)
+  const d = reg.docOf(w.id, payload.docId)
+  if (!d) throw new Error('new tab was not registered')
+  return d
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +598,114 @@ async function confirmQuit(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Agent bridge facade (keeps `reg` private; see agent.ts and agentServer.ts)
+
+type PendingAgentRequest = {
+  winId: number
+  resolve: (result: unknown) => void
+  reject: (error: AgentError) => void
+  timer: NodeJS.Timeout
+}
+/** requestId → in-flight per-doc op forwarded to a renderer. */
+const pendingAgent = new Map<string, PendingAgentRequest>()
+
+function docInfo(d: DocState): AgentDocInfo {
+  return {
+    docId: d.docId,
+    title: docTitle(d.path, d.title),
+    path: d.path,
+    dirty: d.dirty,
+    active: reg.windows.get(d.winId)?.activeDocId === d.docId,
+    windowId: d.winId
+  }
+}
+
+/** Every open doc, in window order then tab-creation order. */
+export function agentListDocs(): AgentDocInfo[] {
+  const out: AgentDocInfo[] = []
+  for (const w of reg.windows.values()) {
+    if (w.win.isDestroyed()) continue
+    for (const d of reg.docsOf(w.id)) out.push(docInfo(d))
+  }
+  return out
+}
+
+/**
+ * The doc an agent op targets: `docId` when given, else the active doc of the
+ * focused (or last-focused) window. Undefined when there is no such doc.
+ */
+export function agentResolveDoc(
+  docId?: string
+): { w: WinState<BrowserWindow>; d: DocState } | undefined {
+  if (docId !== undefined) {
+    const d = reg.docs.get(docId)
+    const w = d && reg.windows.get(d.winId)
+    return d && w && !w.win.isDestroyed() ? { w, d } : undefined
+  }
+  const w = activeWin()
+  const d = w && reg.activeDoc(w.id)
+  return w && d ? { w, d } : undefined
+}
+
+/** New untitled tab for an agent: never raises the window. */
+export function agentNewDrawing(title?: string): AgentDocInfo {
+  const name = title ? sanitizeFileName(title) : null
+  const d = newTab(undefined, { focus: false, title: name ?? undefined })
+  return docInfo(d)
+}
+
+/**
+ * Forward a per-doc op to the renderer hosting `docId`: activate the tab (without
+ * raising the window), send `agent:request` and wait for the matching
+ * `agent:response`. Rejects with an `AgentError` (TIMEOUT after `timeoutMs`).
+ */
+export function rendererRequest(
+  w: WinState<BrowserWindow>,
+  docId: string,
+  op: AgentDocOp,
+  params: unknown,
+  timeoutMs: number
+): Promise<unknown> {
+  if (w.win.isDestroyed() || !reg.windows.has(w.id) || !reg.docOf(w.id, docId))
+    return Promise.reject(agentError('NO_SUCH_DOC', `no open drawing with docId "${docId}"`))
+  if (!w.delivered)
+    return Promise.reject(agentError('NOT_READY', 'the window is still loading; try again'))
+
+  reg.setActive(w.id, docId)
+  send(w, IPC.activateDoc, docId)
+  updateWindowChrome(w.id)
+
+  const requestId = randomUUID()
+  return new Promise<unknown>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingAgent.delete(requestId)
+      reject(agentError('TIMEOUT', `${op} timed out after ${Math.round(timeoutMs / 1000)} s`))
+    }, timeoutMs)
+    pendingAgent.set(requestId, { winId: w.id, resolve, reject, timer })
+    const req: AgentRequest = { requestId, docId, op, params }
+    send(w, IPC.agentRequest, req)
+  })
+}
+
+function settleAgentRequest(requestId: string): PendingAgentRequest | undefined {
+  const p = pendingAgent.get(requestId)
+  if (!p) return undefined
+  pendingAgent.delete(requestId)
+  clearTimeout(p.timer)
+  return p
+}
+
+/** Reject every in-flight op for a window that closed or crashed. */
+function failPendingAgentRequests(winId: number, error: AgentError): void {
+  for (const [id, p] of pendingAgent) {
+    if (p.winId !== winId) continue
+    pendingAgent.delete(id)
+    clearTimeout(p.timer)
+    p.reject(error)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // IPC
 
 /** Window-level message from a known document window. */
@@ -583,6 +716,18 @@ function onWin(
   ipcMain.on(channel, (e, ...args) => {
     const w = reg.windows.get(e.sender.id)
     if (w) fn(w, e, ...args)
+  })
+}
+
+/** Window-level invoke from a known document window (rejects unknown senders). */
+function handleWin<T>(
+  channel: string,
+  fn: (w: WinState<BrowserWindow>, e: IpcMainInvokeEvent, ...args: unknown[]) => T
+): void {
+  ipcMain.handle(channel, (e, ...args) => {
+    const w = reg.windows.get(e.sender.id)
+    if (!w) throw new Error('unknown window')
+    return fn(w, e, ...args)
   })
 }
 
@@ -642,6 +787,31 @@ function registerIpc(): void {
   onWin(IPC.openExternal, (_w, _e, url) => {
     if (typeof url === 'string') openExternalSafe(url)
   })
+
+  onWin(IPC.agentResponse, (w, _e, res) => {
+    if (!res || typeof res !== 'object') return
+    const r = res as Record<string, unknown>
+    if (typeof r.requestId !== 'string') return
+    // Only the window the request was sent to may answer it.
+    const p = pendingAgent.get(r.requestId)
+    if (!p || p.winId !== w.id) return
+    if (r.ok === true) {
+      settleAgentRequest(r.requestId)
+      p.resolve(r.result)
+    } else if (r.ok === false && isAgentError(r.error)) {
+      settleAgentRequest(r.requestId)
+      p.reject({ code: r.error.code, message: r.error.message })
+    }
+  })
+
+  // Agent bridge on/off from the in-app main menu. Main owns the state; the
+  // effective value is answered here and pushed to every window (agent.ts).
+  handleWin(IPC.getAgentEnabled, () => isAgentEnabled())
+  handleWin(IPC.setAgentEnabled, (_w, _e, on) => {
+    if (typeof on !== 'boolean') throw new Error('on must be a boolean')
+    return setAgentEnabled(on)
+  })
+  onWin(IPC.showAgentSetup, () => void showAgentSetup())
 
   onDoc(IPC.setActiveDoc, (w, d) => {
     reg.setActive(w.id, d.docId)

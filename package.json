@@ -28,16 +28,20 @@
     "build:mac": "pnpm run build && electron-builder --mac",
     "test:e2e": "electron-vite build && playwright test",
     "icons": "sh scripts/make-icons.sh",
-    "screenshots": "electron-vite build && node scripts/screenshots.mjs"
+    "screenshots": "electron-vite build && node scripts/screenshots.mjs",
+    "mcp": "node out/main/mcp.js"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
-    "@excalidraw/excalidraw": "0.18.1"
+    "@excalidraw/excalidraw": "0.18.1",
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",
     "@electron-toolkit/eslint-config-ts": "^4.0.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@modelcontextprotocol/client": "2.4.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",

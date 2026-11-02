@@ -62,3 +62,10 @@ New UI that needs a server (collaboration, AI, online libraries) must stay disab
 - `DocumentEditor.tsx`: the dialog names used for `export-image` (`imageExport`) and
   `mermaid` (`ttd` / `mermaid`).
 - `pnpm screenshots` if the UI changed visibly.
+- `agentOps.ts` / `agentScene.ts`: `convertToExcalidrawElements`, `restoreElements`,
+  `newElementWith`, `exportToBlob`, `CaptureUpdateAction.IMMEDIATELY`, and the element shapes
+  `agentScene.ts` builds by hand (arrow `startBinding`/`endBinding` with `focus`/`gap`/
+  `fixedPoint`, `boundElements`, `containerId`, fractional `index` of appended elements, and
+  the bound-label padding in `boundTextPosition`).
+  `pnpm test` covers the pure parts; `tests/e2e/agent.spec.ts` exercises a real editor. After
+  a bump, also ask an agent for a labelled box, a bound arrow and a frame, then ⌘Z three times.

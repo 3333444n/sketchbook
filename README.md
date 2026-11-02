@@ -38,6 +38,9 @@ the network: no accounts, no sync, no telemetry.
 - **Mermaid to diagram.** Paste a flowchart, sequence or class diagram and get editable shapes.
 - **Light, dark and system theme.**
 - **Keyboard shortcuts** for files and tabs, on top of all of Excalidraw's own.
+- **Works with your AI agent (opt-in).** A bundled MCP server lets Claude Code, Claude
+  Desktop, Cursor or Codex draw in the tab you're looking at and see the result. Local only,
+  off by default. See [Use it with an AI agent](#use-it-with-an-ai-agent).
 
 ## Screenshots
 
@@ -114,7 +117,8 @@ To hear about new versions, click **Watch → Custom → Releases** on the GitHu
 
 Drag **Sketchbook** from **Applications** to the Trash. Your drawings stay where you saved
 them. To also remove settings and crash-recovery data, delete
-`~/Library/Application Support/sketchbook`.
+`~/Library/Application Support/Sketchbook`. If you registered the MCP server with an agent,
+remove that entry too (for Claude Code: `claude mcp remove sketchbook`).
 
 ## Build from source
 
@@ -150,6 +154,31 @@ More in [docs/building-and-releasing.md](docs/building-and-releasing.md).
 
 All of Excalidraw's shortcuts work too (press `?` in the app for the full list).
 
+## Use it with an AI agent
+
+Sketchbook ships an [MCP](https://modelcontextprotocol.io) server, so a local AI agent can read
+the drawing you're looking at, add or change shapes, text and arrows, and look at the result
+as an image. Every agent edit is one undo step (⌘Z), marks the tab unsaved, and never touches
+your file until you press ⌘S.
+
+1. In Sketchbook, turn on **Allow agent connections**, from the **Agent** menu in the menu
+   bar or from the ☰ menu in the top-left corner of the canvas (off by default; remembered).
+2. Choose **Set up agent access…** (same two places) and copy the config for your agent. For
+   Claude Code it's one command:
+
+   ```sh
+   claude mcp add sketchbook -e ELECTRON_RUN_AS_NODE=1 -- "/Applications/Sketchbook.app/Contents/MacOS/Sketchbook" "/Applications/Sketchbook.app/Contents/Resources/mcp/index.js"
+   ```
+
+3. Ask: "Draw this repo's architecture in Sketchbook" or "Fix the overlapping boxes in my
+   drawing and show me."
+
+The v1.0.0 download does not include this; it needs a newer release or a build from source.
+
+The agent talks to the app over a local socket on your Mac; Sketchbook still makes no network
+requests. Config for Claude Desktop, Cursor and Codex, the tool reference and the security
+model are in [docs/agent-bridge.md](docs/agent-bridge.md).
+
 ## How it works
 
 - An Electron app embeds the MIT-licensed `@excalidraw/excalidraw` component (0.18.1); there is
@@ -158,6 +187,9 @@ All of Excalidraw's shortcuts work too (press `?` in the app for the full list).
   owns its tabs and keeps at most five editors mounted.
 - The UI is served from a private `app://` scheme with bundled fonts, a strict CSP and a network
   block, so it behaves the same with Wi-Fi off.
+- The agent bridge is a Unix socket in the app's data folder (same user only, off by default)
+  plus an MCP server shipped inside the app bundle and run by the app's own binary in Node
+  mode.
 
 Details: [docs/architecture.md](docs/architecture.md) and the
 [architecture decision records](docs/adr/README.md).
@@ -168,7 +200,9 @@ Sketchbook leaves out the parts of excalidraw.com that need a server, because th
 whiteboard that works anywhere and keeps your data on your machine:
 
 - **Live collaboration and share links**: both need a relay server and accounts.
-- **AI features** (text-to-diagram, wireframe-to-code): they call a remote model.
+- **Excalidraw's built-in AI features** (text-to-diagram, wireframe-to-code): they call a
+  remote model. No AI is built into the app; instead, a local agent you already run can
+  connect, opt-in (see [Use it with an AI agent](#use-it-with-an-ai-agent)).
 - **Online library browsing** at libraries.excalidraw.com: it's a website. You can still import
   local `.excalidrawlib` files.
 

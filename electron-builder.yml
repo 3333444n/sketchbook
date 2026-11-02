@@ -20,6 +20,8 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # Everything the app needs at runtime is bundled into out/ by electron-vite.
   - '!node_modules/**'
+  # The MCP server ships outside the asar (see extraResources), not inside it.
+  - '!out/main/mcp.js'
 asarUnpack:
   - resources/**
 npmRebuild: false
@@ -29,6 +31,12 @@ extraResources:
     to: LICENSE
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
+  # Self-contained MCP server, run as
+  #   ELECTRON_RUN_AS_NODE=1 Sketchbook.app/Contents/MacOS/Sketchbook Contents/Resources/mcp/index.js
+  - from: out/main/mcp.js
+    to: mcp/index.js
+
+# Do not set electronFuses.runAsNode: false — the bundled MCP server runs via ELECTRON_RUN_AS_NODE.
 
 mac:
   target:

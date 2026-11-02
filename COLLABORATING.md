@@ -25,15 +25,16 @@ pnpm dev
 
 ## Dev loop
 
-| Command                     | What it does                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| `pnpm dev`                  | Launches the app with hot reload for the renderer; main/preload rebuild and restart. |
-| `pnpm typecheck`            | Type-checks node (main, preload, shared) and web (renderer) projects.                |
-| `pnpm test`                 | Vitest unit tests (`src/**/__tests__/**/*.test.ts`).                                 |
-| `pnpm test:e2e`             | Builds, then runs the Playwright `_electron` e2e suite against the production app.   |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier.                                                                   |
-| `pnpm build:mac`            | Builds an ad-hoc-signed arm64 dmg into `dist/`.                                      |
-| `pnpm screenshots`          | Builds, then regenerates the README images in `docs/images/`.                        |
+| Command                     | What it does                                                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                  | Launches the app with hot reload for the renderer; main/preload rebuild and restart.                                                |
+| `pnpm typecheck`            | Type-checks node (main, preload, shared) and web (renderer) projects.                                                               |
+| `pnpm test`                 | Vitest unit tests (`src/**/__tests__/**/*.test.ts`).                                                                                |
+| `pnpm test:e2e`             | Builds, then runs the Playwright `_electron` e2e suite against the production app.                                                  |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier.                                                                                                                  |
+| `pnpm build:mac`            | Builds an ad-hoc-signed arm64 dmg into `dist/`.                                                                                     |
+| `pnpm screenshots`          | Builds, then regenerates the README images in `docs/images/`.                                                                       |
+| `pnpm mcp`                  | Runs the built MCP server on stdio (`node out/main/mcp.js`); see [docs/agent-bridge.md](docs/agent-bridge.md#development-workflow). |
 
 ### Debugging
 
@@ -44,16 +45,23 @@ pnpm dev
   `/Applications/Sketchbook.app/Contents/MacOS/Sketchbook`.
 - **Breakpoints in main:** `.vscode/launch.json` contains debug configurations.
 - **Recovery journals** live in `~/Library/Application Support/<app name>/recovery/`. Delete
-  them to reset a stuck recovery state.
+  them to reset a stuck recovery state. (`<app name>` is `sketchbook` for `pnpm dev` and
+  `Sketchbook` for the packaged app.)
+- **Agent bridge:** main logs with an `[agent]` prefix. The socket and pointer file are in
+  `<userData>/agent/`; with the bridge on, `printf '{"id":1,"method":"listTabs"}\n' | nc -U <socketPath>`
+  answers without any MCP client. Claude Desktop's server logs are in
+  `~/Library/Logs/Claude/mcp*.log`. More in [docs/agent-bridge.md](docs/agent-bridge.md#troubleshooting).
 
 ## Project structure
 
 ```
 src/
   shared/ipc.ts      IPC contract shared by all layers
-  main/              Electron main process (windows, files, menu, recovery, protocol)
+  shared/agent.ts    Agent bridge contract (type-only) shared by main, renderer and mcp
+  main/              Electron main process (windows, files, menu, recovery, protocol, agent socket)
   preload/           contextBridge API (window.sketchbook)
   renderer/          React app embedding Excalidraw
+  mcp/               Bundled MCP server (stdio → Unix socket); never imports electron
 tests/e2e/           Playwright _electron end-to-end tests
 scripts/             Icon and README-screenshot generators
 docs/                Architecture, IPC, offline, performance, testing, releasing, ADRs
@@ -97,8 +105,10 @@ The same list is in [.github/pull_request_template.md](.github/pull_request_temp
 - Prettier (`.prettierrc.yaml`: single quotes, no semicolons, 100 columns, no trailing commas)
   and ESLint (`eslint.config.mjs`) are configured. Run `pnpm format` and `pnpm lint`.
 - TypeScript everywhere; avoid `any`. Validate untrusted input (IPC arguments, file contents).
-- Keep `src/main/fileio.ts`, `src/main/recovery.ts` and `src/main/registry.ts` free of `electron` imports so they stay
-  unit-testable.
+- Keep `src/main/fileio.ts`, `src/main/recovery.ts`, `src/main/registry.ts`,
+  `src/main/settings.ts`, `src/main/agentServer.ts`, `src/main/agentConfig.ts`,
+  `src/renderer/src/agentScene.ts` and all of `src/mcp/` free of `electron` imports so they
+  stay unit-testable (and, for `src/mcp/`, runnable as a plain Node process).
 - Comments explain _why_, not _what_.
 
 ## Testing expectations

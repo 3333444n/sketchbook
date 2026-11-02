@@ -1,7 +1,8 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import type { AgentPointer } from '../../src/shared/agent'
 
 export const ROOT = resolve(__dirname, '../..')
 export const MAIN = join(ROOT, 'out/main/index.js')
@@ -145,5 +146,70 @@ export function nonLocal(urls: string[]): string[] {
     } catch {
       return true
     }
+  })
+}
+
+// ---- agent bridge ----------------------------------------------------------
+
+/** `userData/settings.json` as main persists it. */
+export function settingsPath(userData: string): string {
+  return join(userData, 'settings.json')
+}
+
+/** `userData/agent/agent.json`, present only while the bridge is listening. */
+export function pointerPath(userData: string): string {
+  return join(userData, 'agent', 'agent.json')
+}
+
+export function readSettings(userData: string): Record<string, unknown> | null {
+  const file = settingsPath(userData)
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null
+}
+
+/** Pre-write the profile so the bridge starts with the app (no menu round trip). */
+export function makeAgentProfile(): string {
+  const userData = makeTempDir('sketchbook-agent-')
+  mkdirSync(userData, { recursive: true })
+  writeFileSync(settingsPath(userData), JSON.stringify({ allowAgentConnections: true }) + '\n')
+  return userData
+}
+
+export function readPointer(userData: string): AgentPointer | null {
+  const file = pointerPath(userData)
+  if (!existsSync(file)) return null
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as AgentPointer
+  } catch {
+    return null
+  }
+}
+
+/** Poll until main has written the pointer file (bridge up). */
+export async function waitForPointer(userData: string, timeoutMs = 15_000): Promise<AgentPointer> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const p = readPointer(userData)
+    if (p && existsSync(p.socketPath)) return p
+    if (Date.now() > deadline) throw new Error(`agent pointer did not appear in ${userData}`)
+    await new Promise((r) => setTimeout(r, 100))
+  }
+}
+
+/** Poll until the pointer file is gone (bridge down). */
+export async function waitForNoPointer(userData: string, timeoutMs = 15_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (existsSync(pointerPath(userData))) {
+    if (Date.now() > deadline) throw new Error(`agent pointer still present in ${userData}`)
+    await new Promise((r) => setTimeout(r, 100))
+  }
+}
+
+/** Click the "Allow Agent Connections" checkbox exactly as the user would. */
+export async function toggleAgentMenu(app: ElectronApplication): Promise<boolean> {
+  return app.evaluate(({ Menu }) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById('allow-agent-connections')
+    if (!item) throw new Error('menu item allow-agent-connections not found')
+    item.click()
+    return item.checked
   })
 }

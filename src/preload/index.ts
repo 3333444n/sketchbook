@@ -20,6 +20,12 @@ const api: SketchbookAPI = {
   newTab: () => ipcRenderer.send(IPC.newTab),
   newWindow: () => ipcRenderer.send(IPC.newWindow),
   openExternal: (url) => ipcRenderer.send(IPC.openExternal, url),
+  onAgentRequest: (cb) => on(IPC.agentRequest, cb),
+  agentResponse: (res) => ipcRenderer.send(IPC.agentResponse, res),
+  getAgentEnabled: () => ipcRenderer.invoke(IPC.getAgentEnabled),
+  setAgentEnabled: (on) => ipcRenderer.invoke(IPC.setAgentEnabled, !!on),
+  showAgentSetup: () => ipcRenderer.send(IPC.showAgentSetup),
+  onAgentEnabledChanged: (cb) => on(IPC.agentEnabledChanged, cb),
 
   // per-document
   setActiveDoc: (docId) => ipcRenderer.send(IPC.setActiveDoc, docId),

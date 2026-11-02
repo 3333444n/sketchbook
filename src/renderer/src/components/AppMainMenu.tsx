@@ -1,12 +1,22 @@
 // Hamburger menu, modelled on excalidraw.com's AppMainMenu minus collaboration,
 // Excalidraw+, socials and sign-up. File items go through main (native dialogs).
+// The agent section mirrors the native Agent menu; main owns that state.
 
 import { memo } from 'react'
 import { MainMenu } from '@excalidraw/excalidraw'
 import type { ThemePreference } from '../theme'
+import { useAgentMenuContext } from '../agentMenu'
 import { bridge } from '../bridge'
 import { shortcut } from '../shortcuts'
-import { GitHubIcon, OpenIcon, SaveAsIcon, SaveIcon } from './icons'
+import {
+  GitHubIcon,
+  OpenIcon,
+  PlugIcon,
+  SaveAsIcon,
+  SaveIcon,
+  SquareCheckIcon,
+  SquareIcon
+} from './icons'
 
 export const EXCALIDRAW_GITHUB_URL = 'https://github.com/excalidraw/excalidraw'
 
@@ -15,6 +25,28 @@ type Props = {
   onSaveAs: () => void
   theme: ThemePreference
   onThemeChange: (theme: ThemePreference) => void
+}
+
+/** "Allow agent connections" (checkbox) and "Set up agent access…". */
+function AgentItems(): React.JSX.Element {
+  const agent = useAgentMenuContext()
+  return (
+    <>
+      <MainMenu.Item
+        icon={agent.enabled ? <SquareCheckIcon /> : <SquareIcon />}
+        selected={agent.enabled}
+        role="menuitemcheckbox"
+        aria-checked={agent.enabled}
+        data-testid="agent-toggle"
+        onSelect={agent.toggle}
+      >
+        Allow agent connections
+      </MainMenu.Item>
+      <MainMenu.Item icon={<PlugIcon />} data-testid="agent-setup" onSelect={agent.setup}>
+        Set up agent access…
+      </MainMenu.Item>
+    </>
+  )
 }
 
 export const AppMainMenu = memo(function AppMainMenu({
@@ -43,6 +75,8 @@ export const AppMainMenu = memo(function AppMainMenu({
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
+      <MainMenu.Separator />
+      <AgentItems />
       <MainMenu.Separator />
       <MainMenu.Item
         icon={<GitHubIcon />}

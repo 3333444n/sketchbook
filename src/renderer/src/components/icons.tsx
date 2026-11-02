@@ -57,6 +57,33 @@ export const GitHubIcon = (): React.JSX.Element => (
   </BaseIcon>
 )
 
+/** Tabler "square": an unchecked checkbox. */
+export const SquareIcon = (): React.JSX.Element => (
+  <BaseIcon>
+    <path d="M3 3m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+  </BaseIcon>
+)
+
+/** Tabler "square-check": a checked checkbox. */
+export const SquareCheckIcon = (): React.JSX.Element => (
+  <BaseIcon>
+    <path d="M3 3m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
+    <path d="M9 12l2 2l4 -4" />
+  </BaseIcon>
+)
+
+/** Tabler "plug-connected": agent access set-up. */
+export const PlugIcon = (): React.JSX.Element => (
+  <BaseIcon>
+    <path d="M7 12l5 5l-1.5 1.5a3.536 3.536 0 1 1 -5 -5l1.5 -1.5z" />
+    <path d="M17 12l-5 -5l1.5 -1.5a3.536 3.536 0 1 1 5 5l-1.5 1.5z" />
+    <path d="M3 21l2.5 -2.5" />
+    <path d="M18.5 5.5l2.5 -2.5" />
+    <path d="M10 11l-2 2" />
+    <path d="M13 14l-2 2" />
+  </BaseIcon>
+)
+
 /** Sketchbook mark: a spiral-bound sketchbook with a squiggle. */
 export const SketchbookMark = (): React.JSX.Element => (
   <svg

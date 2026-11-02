@@ -22,7 +22,11 @@ import type { LibraryItems } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
 import './app.css'
 import { TAB_STRIP_HEIGHT } from '../../shared/chrome'
-import type { DocPayload, MenuAction } from '../../shared/ipc'
+import type { AgentError } from '../../shared/agent'
+import type { AgentRequest, AgentResponse, DocPayload, MenuAction } from '../../shared/ipc'
+import { AgentMenuContext, useAgentMenu } from './agentMenu'
+import { agentOps, isAgentDocOp, waitForEditor } from './agentOps'
+import { isAgentError } from './agentScene'
 import { docName } from './blob'
 import { bridge } from './bridge'
 import { TabStrip, type TabInfo } from './components/TabStrip'
@@ -96,9 +100,19 @@ function tabTitle(tab: Tab): string {
 
 const emptyScene = (): string => serializeAsJSON([], {}, {}, 'local')
 
+/** How long an agent request waits for a tab's editor to mount and load. */
+const AGENT_EDITOR_TIMEOUT_MS = 10_000
+
+const agentFailure = (err: unknown): AgentError =>
+  isAgentError(err)
+    ? err
+    : { code: 'INTERNAL', message: err instanceof Error ? err.message : String(err) }
+
 function App(): React.JSX.Element {
   const { preference, theme, setPreference } = useTheme()
   const [fullScreen, setFullScreen] = useState(false)
+  // Window-level: the in-app main menu's agent items (see agentMenu.tsx).
+  const agentMenu = useAgentMenu()
 
   // The model lives in a ref (read synchronously by IPC handlers and the close
   // flow) mirrored into state for rendering.
@@ -330,6 +344,76 @@ function App(): React.JSX.Element {
     [activate, closeTab]
   )
 
+  // ---- agent bridge -----------------------------------------------------------
+  //
+  // Main forwards per-document agent operations here. Each one activates its
+  // tab (mounting it if evicted), waits for the editor, runs the op and answers
+  // exactly once. Ops on the same doc run one after another (a per-doc promise
+  // chain) so a slow export never interleaves with an edit; different docs are
+  // independent.
+
+  const agentQueues = useRef(new Map<string, Promise<void>>())
+  const handleAgentRequest = useCallback(
+    (req: AgentRequest) => {
+      const run = async (): Promise<AgentResponse> => {
+        const { requestId, docId, op } = req
+        if (!modelRef.current.tabs.some((t) => t.docId === docId)) {
+          return {
+            requestId,
+            ok: false,
+            error: { code: 'NO_SUCH_DOC', message: `No open tab ${docId}` }
+          }
+        }
+        if (!isAgentDocOp(op)) {
+          return {
+            requestId,
+            ok: false,
+            error: { code: 'UNKNOWN_METHOD', message: `Unknown op ${op}` }
+          }
+        }
+        activate(docId)
+        const api = await waitForEditor(
+          () => editors.current.get(docId)?.getApi() ?? null,
+          AGENT_EDITOR_TIMEOUT_MS
+        )
+        const tab = modelRef.current.tabs.find((t) => t.docId === docId)
+        if (!api || !tab) {
+          const message = tab ? 'The drawing is still loading' : `Tab ${docId} was closed`
+          return {
+            requestId,
+            ok: false,
+            error: { code: tab ? 'NOT_READY' : 'NO_SUCH_DOC', message }
+          }
+        }
+        try {
+          const result = await agentOps[op]({ api, docId, title: tabTitle(tab) }, req.params)
+          return { requestId, ok: true, result }
+        } catch (err) {
+          if (!isAgentError(err)) console.error(`Agent op ${op} failed`, err)
+          return { requestId, ok: false, error: agentFailure(err) }
+        }
+      }
+      const queue = agentQueues.current
+      const prev = queue.get(req.docId) ?? Promise.resolve()
+      const next: Promise<void> = prev
+        // A failed predecessor must not swallow this request.
+        .catch(() => undefined)
+        .then(() =>
+          run().catch((err): AgentResponse => ({
+            requestId: req.requestId,
+            ok: false,
+            error: agentFailure(err)
+          }))
+        )
+        .then((res) => bridge.agentResponse(res))
+        .finally(() => {
+          if (queue.get(req.docId) === next) queue.delete(req.docId)
+        })
+      queue.set(req.docId, next)
+    },
+    [activate]
+  )
+
   useEffect(() => {
     let cancelled = false
     bridge.getInitialState().then(
@@ -348,13 +432,14 @@ function App(): React.JSX.Element {
       bridge.onActivateDoc(activate),
       bridge.onSaveAndClose((docId) => void saveDoc(docId)),
       bridge.onMenu(handleMenu),
-      bridge.onFullScreenChange(setFullScreen)
+      bridge.onFullScreenChange(setFullScreen),
+      bridge.onAgentRequest(handleAgentRequest)
     ]
     return () => {
       cancelled = true
       unsubscribers.forEach((off) => off())
     }
-  }, [activate, handleMenu, openDocs, saveDoc])
+  }, [activate, handleAgentRequest, handleMenu, openDocs, saveDoc])
 
   const { activeId } = model
   useEffect(() => {
@@ -460,18 +545,20 @@ function App(): React.JSX.Element {
         onRefocus={onRefocus}
       />
       <div className="sketchbook-editors" style={{ top: TAB_STRIP_HEIGHT }}>
-        {mountedTabs.map((tab) => (
-          <DocumentEditor
-            key={`${tab.docId}:${tab.load}`}
-            doc={tab.doc}
-            init={tab.init}
-            name={tabTitle(tab)}
-            active={tab.docId === activeId}
-            theme={theme}
-            themePreference={preference}
-            events={events}
-          />
-        ))}
+        <AgentMenuContext.Provider value={agentMenu}>
+          {mountedTabs.map((tab) => (
+            <DocumentEditor
+              key={`${tab.docId}:${tab.load}`}
+              doc={tab.doc}
+              init={tab.init}
+              name={tabTitle(tab)}
+              active={tab.docId === activeId}
+              theme={theme}
+              themePreference={preference}
+              events={events}
+            />
+          ))}
+        </AgentMenuContext.Provider>
       </div>
     </div>
   )
