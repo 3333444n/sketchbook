@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs'
+import { isBuiltin } from 'module'
 import { join, relative, resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import { normalizePath, type Plugin } from 'vite'
@@ -178,13 +179,13 @@ function mcpSelfContained(): Plugin {
           '[sketchbook] out/main/mcp.js was not emitted; check build.rolldownOptions.input'
         )
       }
-      if (
-        chunk.imports.length ||
-        chunk.dynamicImports.length ||
-        /require\(["']electron["']\)/.test(chunk.code)
-      ) {
+      // `imports` lists externals too; Node built-ins (node:fs, node:net, …)
+      // are fine under ELECTRON_RUN_AS_NODE. Anything else is a split chunk
+      // or an unbundled dependency, which the copied file cannot resolve.
+      const offending = [...chunk.imports, ...chunk.dynamicImports].filter((id) => !isBuiltin(id))
+      if (offending.length || /require\(["']electron["']\)/.test(chunk.code)) {
         throw new Error(
-          'out/main/mcp.js must be self-contained; keep src/shared/agent.ts type-only and share no runtime modules between main and mcp'
+          `out/main/mcp.js must be self-contained (found: ${offending.join(', ') || 'require("electron")'}); keep src/shared/agent.ts type-only and share no runtime modules between main and mcp`
         )
       }
     }

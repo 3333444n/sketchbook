@@ -6,7 +6,12 @@
 // mcpSelfContained in electron.vite.config.ts); never write to stdout except
 // MCP protocol traffic — use stderr for diagnostics.
 //
-// Phase A stub; Phase B3 replaces it with the real server.
+// The socket is only touched inside tool handlers, so `tools/list` works with
+// Sketchbook closed and each tool call reports NOT_RUNNING / DISABLED instead.
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
+import { createSocketRpc } from './client'
+import { createServer } from './server'
 
-console.error('sketchbook mcp: not implemented yet (' + __SKETCHBOOK_VERSION__ + ')')
-process.exit(0)
+serveStdio(() => createServer({ rpc: createSocketRpc(), version: __SKETCHBOOK_VERSION__ }), {
+  onerror: (err) => console.error('sketchbook mcp:', err.message)
+})
