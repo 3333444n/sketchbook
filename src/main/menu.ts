@@ -2,7 +2,7 @@
 import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { newTab, newUntitledWindow, sendMenuToFocused, showOpenDialog } from './documents'
-import { isAgentEnabled, setAgentEnabled, showAgentSetup } from './agent'
+import { AGENT_MENU_ITEM_ID, isAgentEnabled, setAgentEnabled, showAgentSetup } from './agent'
 
 /**
  * Electron gives each menu item a single accelerator, so alternates are hidden
@@ -91,16 +91,13 @@ export function buildMenu(): void {
       label: 'Agent',
       submenu: [
         {
-          id: 'allow-agent-connections',
+          id: AGENT_MENU_ITEM_ID,
           label: 'Allow Agent Connections',
           type: 'checkbox',
           checked: isAgentEnabled(),
-          click: (item) => {
-            void setAgentEnabled(item.checked).then((on) => {
-              // Start failed (or stop did): keep the checkbox honest.
-              if (on !== item.checked) item.checked = on
-            })
-          }
+          // Electron has already toggled `item.checked`; setAgentEnabled corrects
+          // it (and tells every window) once the effective state is known.
+          click: (item) => void setAgentEnabled(item.checked)
         },
         { type: 'separator' },
         { label: 'Set Up Agent Access…', click: () => void showAgentSetup() }

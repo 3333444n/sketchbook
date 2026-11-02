@@ -109,6 +109,21 @@ export interface SketchbookAPI {
   onAgentRequest(cb: (req: AgentRequest) => void): () => void
   /** Answer an agent request (exactly once per `requestId`). */
   agentResponse(res: AgentResponse): void
+  /** Whether the agent bridge is on (main is the source of truth). */
+  getAgentEnabled(): Promise<boolean>
+  /**
+   * Turn the agent bridge on or off. Resolves to the effective state, which can
+   * differ from `on` when the bridge failed to start (main already told the user).
+   * Every window also hears about it via `onAgentEnabledChanged`.
+   */
+  setAgentEnabled(on: boolean): Promise<boolean>
+  /** Show the native "Set Up Agent Access" dialog (config snippets with Copy buttons). */
+  showAgentSetup(): void
+  /**
+   * The effective bridge state changed, from any source: the native menu, the
+   * in-app menu of any window, or a failed start. Sent to every open window.
+   */
+  onAgentEnabledChanged(cb: (on: boolean) => void): () => void
 
   // ---- per-document ----------------------------------------------------------
   /** Tell main which tab is active (drives window title, proxy icon, menu target). */
@@ -151,6 +166,10 @@ export const IPC = {
   openExternal: 'shell:open-external',
   agentRequest: 'agent:request',
   agentResponse: 'agent:response',
+  getAgentEnabled: 'agent:get-enabled',
+  setAgentEnabled: 'agent:set-enabled',
+  showAgentSetup: 'agent:show-setup',
+  agentEnabledChanged: 'agent:enabled-changed',
 
   setActiveDoc: 'doc:set-active',
   save: 'doc:save',

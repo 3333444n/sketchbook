@@ -357,6 +357,75 @@ test('the bridge is off by default and the menu toggles it', async () => {
   }
 })
 
+test('the in-app main menu toggles the bridge and stays in step with the native menu', async () => {
+  const userData = makeTempDir('sketchbook-agent-inapp-')
+  const ctx = await launchApp({ userData })
+  const { app, page } = ctx
+  const nativeChecked = (): Promise<boolean | undefined> =>
+    app.evaluate(
+      ({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('allow-agent-connections')?.checked
+    )
+  const openMainMenu = async (): Promise<void> => {
+    await page.getByTestId('main-menu-trigger').click()
+    await page.getByTestId('agent-toggle').waitFor({ state: 'visible' })
+  }
+  const inAppChecked = (): Promise<string | null> =>
+    page.getByTestId('agent-toggle').getAttribute('aria-checked')
+  try {
+    await waitForExcalidraw(page)
+
+    // Off: the in-app item is unchecked, like the native one.
+    await openMainMenu()
+    expect(await inAppChecked()).toBe('false')
+    await expect(page.getByTestId('agent-toggle')).not.toHaveClass(/dropdown-menu-item--selected/)
+    expect(await nativeChecked()).toBe(false)
+
+    // On via the in-app item: bridge up, setting persisted, native checkbox follows.
+    await page.getByTestId('agent-toggle').click()
+    const pointer = await waitForPointer(userData)
+    await expect.poll(() => readSettings(userData)).toEqual({ allowAgentConnections: true })
+    await expect.poll(nativeChecked).toBe(true)
+    expect((await createSocketRpc({ userData })('listTabs', {})).docs).toHaveLength(1)
+    // Selecting an item closes the menu; reopen it to see the checked state.
+    await expect(page.getByTestId('agent-toggle')).toBeHidden()
+    await openMainMenu()
+    expect(await inAppChecked()).toBe('true')
+    await expect(page.getByTestId('agent-toggle')).toHaveClass(/dropdown-menu-item--selected/)
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('agent-toggle')).toBeHidden()
+
+    // Off via the native menu: the in-app item follows main's broadcast.
+    expect(await toggleAgentMenu(app)).toBe(false)
+    await waitForNoPointer(userData)
+    expect(existsSync(pointer.socketPath)).toBe(false)
+    await expect.poll(() => readSettings(userData)).toEqual({ allowAgentConnections: false })
+    await openMainMenu()
+    await expect(page.getByTestId('agent-toggle')).toHaveAttribute('aria-checked', 'false')
+    await expect(page.getByTestId('agent-toggle')).not.toHaveClass(/dropdown-menu-item--selected/)
+
+    // "Set up agent access…" opens the same native dialog as the menu bar item.
+    await app.evaluate(({ dialog }) => {
+      const g = globalThis as unknown as { __sbSetupCalls: number }
+      g.__sbSetupCalls = 0
+      dialog.showMessageBox = (async () => {
+        g.__sbSetupCalls++
+        return { response: 2, checkboxChecked: false }
+      }) as unknown as typeof dialog.showMessageBox
+    })
+    await page.getByTestId('agent-setup').click()
+    await expect
+      .poll(() =>
+        app.evaluate(() => (globalThis as unknown as { __sbSetupCalls: number }).__sbSetupCalls)
+      )
+      .toBe(1)
+
+    await assertOffline(ctx)
+  } finally {
+    await ctx.close()
+    rmSync(userData, { recursive: true, force: true })
+  }
+})
+
 test('the setting survives a relaunch', async () => {
   const userData = makeTempDir('sketchbook-agent-persist-')
   try {

@@ -29,6 +29,7 @@ import {
 } from '../shared/ipc'
 import type { AgentDocInfo, AgentDocOp, AgentError } from '../shared/agent'
 import { agentError, isAgentError } from './agentServer'
+import { isAgentEnabled, setAgentEnabled, showAgentSetup } from './agent'
 import { TRAFFIC_LIGHT_POSITION } from '../shared/chrome'
 import { isAppUrl, loadRenderer } from './protocol'
 import {
@@ -106,6 +107,11 @@ function focusWindow(win: BrowserWindow): void {
 
 function send(w: WinState<BrowserWindow>, channel: string, ...args: unknown[]): void {
   if (!w.win.isDestroyed()) w.win.webContents.send(channel, ...args)
+}
+
+/** Push a window-level message to every open document window. */
+export function broadcast(channel: string, ...args: unknown[]): void {
+  for (const w of reg.windows.values()) send(w, channel, ...args)
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +719,18 @@ function onWin(
   })
 }
 
+/** Window-level invoke from a known document window (rejects unknown senders). */
+function handleWin<T>(
+  channel: string,
+  fn: (w: WinState<BrowserWindow>, e: IpcMainInvokeEvent, ...args: unknown[]) => T
+): void {
+  ipcMain.handle(channel, (e, ...args) => {
+    const w = reg.windows.get(e.sender.id)
+    if (!w) throw new Error('unknown window')
+    return fn(w, e, ...args)
+  })
+}
+
 /** Per-doc message: ignored unless the doc belongs to the sender's window. */
 function onDoc(
   channel: string,
@@ -785,6 +803,15 @@ function registerIpc(): void {
       p.reject({ code: r.error.code, message: r.error.message })
     }
   })
+
+  // Agent bridge on/off from the in-app main menu. Main owns the state; the
+  // effective value is answered here and pushed to every window (agent.ts).
+  handleWin(IPC.getAgentEnabled, () => isAgentEnabled())
+  handleWin(IPC.setAgentEnabled, (_w, _e, on) => {
+    if (typeof on !== 'boolean') throw new Error('on must be a boolean')
+    return setAgentEnabled(on)
+  })
+  onWin(IPC.showAgentSetup, () => void showAgentSetup())
 
   onDoc(IPC.setActiveDoc, (w, d) => {
     reg.setActive(w.id, d.docId)

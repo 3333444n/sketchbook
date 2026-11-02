@@ -3,14 +3,24 @@
 // Owns the on/off state (persisted in userData/settings.json), builds the
 // AgentHost from the documents facade, and shows the setup dialog. The socket
 // and pointer file live in userData/agent/ (see agentServer.ts).
-import { app, BrowserWindow, clipboard, dialog } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { AgentDocOp, AgentParams, AgentResult } from '../shared/agent'
+import { IPC } from '../shared/ipc'
 import { AgentServer, agentError, type AgentHost } from './agentServer'
 import { claudeMcpAddCommand, mcpConfigJSON, type McpLaunch } from './agentConfig'
 import { readSettings, writeSettings } from './settings'
-import { agentListDocs, agentNewDrawing, agentResolveDoc, rendererRequest } from './documents'
+import {
+  agentListDocs,
+  agentNewDrawing,
+  agentResolveDoc,
+  broadcast,
+  rendererRequest
+} from './documents'
+
+/** `id` of the native "Agent ▸ Allow Agent Connections" checkbox (menu.ts). */
+export const AGENT_MENU_ITEM_ID = 'allow-agent-connections'
 
 /** How long main waits for the renderer to answer a per-doc op. */
 const OP_TIMEOUT_MS = 15_000
@@ -92,8 +102,21 @@ export function isAgentEnabled(): boolean {
 }
 
 /**
- * Turn the bridge on or off and persist the choice. Resolves to the effective
- * state; on failure the user is told and the state is left as it is.
+ * Tell every UI that shows the setting what the effective state is: the native
+ * checkbox (which Electron toggles on click, so it needs correcting after a
+ * failed start) and the in-app menu of every open window.
+ */
+function notifyAgentEnabled(on: boolean): void {
+  const item = Menu.getApplicationMenu()?.getMenuItemById(AGENT_MENU_ITEM_ID)
+  if (item && item.checked !== on) item.checked = on
+  broadcast(IPC.agentEnabledChanged, on)
+}
+
+/**
+ * The one path that turns the bridge on or off, from the native menu or from a
+ * renderer: start/stop, persist the effective state, then notify every UI.
+ * Resolves to the effective state; on failure the user is told and the bridge
+ * stays as it was (the notification still goes out so the UIs reflect reality).
  */
 export function setAgentEnabled(on: boolean): Promise<boolean> {
   const run = async (): Promise<boolean> => {
@@ -112,6 +135,7 @@ export function setAgentEnabled(on: boolean): Promise<boolean> {
     } catch (err) {
       console.error('[agent] could not write settings:', err)
     }
+    notifyAgentEnabled(effective)
     return effective
   }
   const next = queue.then(run, run)

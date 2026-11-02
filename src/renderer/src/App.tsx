@@ -24,6 +24,7 @@ import './app.css'
 import { TAB_STRIP_HEIGHT } from '../../shared/chrome'
 import type { AgentError } from '../../shared/agent'
 import type { AgentRequest, AgentResponse, DocPayload, MenuAction } from '../../shared/ipc'
+import { AgentMenuContext, useAgentMenu } from './agentMenu'
 import { agentOps, isAgentDocOp, waitForEditor } from './agentOps'
 import { isAgentError } from './agentScene'
 import { docName } from './blob'
@@ -110,6 +111,8 @@ const agentFailure = (err: unknown): AgentError =>
 function App(): React.JSX.Element {
   const { preference, theme, setPreference } = useTheme()
   const [fullScreen, setFullScreen] = useState(false)
+  // Window-level: the in-app main menu's agent items (see agentMenu.tsx).
+  const agentMenu = useAgentMenu()
 
   // The model lives in a ref (read synchronously by IPC handlers and the close
   // flow) mirrored into state for rendering.
@@ -542,18 +545,20 @@ function App(): React.JSX.Element {
         onRefocus={onRefocus}
       />
       <div className="sketchbook-editors" style={{ top: TAB_STRIP_HEIGHT }}>
-        {mountedTabs.map((tab) => (
-          <DocumentEditor
-            key={`${tab.docId}:${tab.load}`}
-            doc={tab.doc}
-            init={tab.init}
-            name={tabTitle(tab)}
-            active={tab.docId === activeId}
-            theme={theme}
-            themePreference={preference}
-            events={events}
-          />
-        ))}
+        <AgentMenuContext.Provider value={agentMenu}>
+          {mountedTabs.map((tab) => (
+            <DocumentEditor
+              key={`${tab.docId}:${tab.load}`}
+              doc={tab.doc}
+              init={tab.init}
+              name={tabTitle(tab)}
+              active={tab.docId === activeId}
+              theme={theme}
+              themePreference={preference}
+              events={events}
+            />
+          ))}
+        </AgentMenuContext.Provider>
       </div>
     </div>
   )
