@@ -22,13 +22,14 @@ footprint. Bug fixes and features that fit the existing design don't need one.
 
 ## Index
 
-| # | Title | Status | Date |
-|---|---|---|---|
-| [0001](0001-embed-excalidraw-in-electron.md) | Embed `@excalidraw/excalidraw` in Electron | Accepted | 2026-10-22 |
-| [0002](0002-electron-vite-and-electron-builder.md) | Build with electron-vite and package with electron-builder | Accepted | 2026-10-22 |
-| [0003](0003-app-protocol-and-bundled-fonts.md) | `app://` protocol and bundled fonts for offline use | Accepted | 2026-10-22 |
-| [0004](0004-native-dialogs-and-atomic-writes.md) | Native file dialogs and atomic writes instead of the File System Access API | Accepted | 2026-10-22 |
-| [0005](0005-recovery-journal.md) | Recovery journal instead of autosave-overwrite | Accepted | 2026-10-22 |
-| [0006](0006-tabs-with-mru-editor-budget.md) | Tabs in one renderer with an MRU budget of 5 mounted editors | Accepted | 2026-10-22 |
-| [0007](0007-frameless-window-custom-tab-strip.md) | Frameless window with a custom tab strip | Accepted | 2026-10-22 |
-| [0008](0008-product-name-and-attribution.md) | Product name "Sketchbook" and Excalidraw attribution | Accepted | 2026-10-22 |
+| #                                                  | Title                                                                       | Status   | Date       |
+| -------------------------------------------------- | --------------------------------------------------------------------------- | -------- | ---------- |
+| [0001](0001-embed-excalidraw-in-electron.md)       | Embed `@excalidraw/excalidraw` in Electron                                  | Accepted | 2026-10-22 |
+| [0002](0002-electron-vite-and-electron-builder.md) | Build with electron-vite and package with electron-builder                  | Accepted | 2026-10-22 |
+| [0003](0003-app-protocol-and-bundled-fonts.md)     | `app://` protocol and bundled fonts for offline use                         | Accepted | 2026-10-22 |
+| [0004](0004-native-dialogs-and-atomic-writes.md)   | Native file dialogs and atomic writes instead of the File System Access API | Accepted | 2026-10-22 |
+| [0005](0005-recovery-journal.md)                   | Recovery journal instead of autosave-overwrite                              | Accepted | 2026-10-22 |
+| [0006](0006-tabs-with-mru-editor-budget.md)        | Tabs in one renderer with an MRU budget of 5 mounted editors                | Accepted | 2026-10-22 |
+| [0007](0007-frameless-window-custom-tab-strip.md)  | Frameless window with a custom tab strip                                    | Accepted | 2026-10-22 |
+| [0008](0008-product-name-and-attribution.md)       | Product name "Sketchbook" and Excalidraw attribution                        | Accepted | 2026-10-22 |
+| [0009](0009-agent-bridge-unix-socket-mcp.md)       | Local agent bridge over a Unix socket with a bundled MCP server             | Proposed | 2026-11-02 |

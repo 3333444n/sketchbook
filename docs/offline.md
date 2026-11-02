@@ -63,6 +63,22 @@ included. Importing a `.excalidrawlib` file still works. Mermaid-to-diagram runs
 The only outbound action is an explicit user click on an external link, which opens in the
 system browser via `shell.openExternal`.
 
+### 6. The agent bridge is local IPC, not a network feature
+
+When the user turns on **Agent ▸ Allow Agent Connections**, main listens on a **Unix domain
+socket** at `userData/agent/agent.sock` ([agent-bridge.md](agent-bridge.md)). That is a file
+on disk with mode `0600` in a `0700` directory, reachable only by processes of the same user
+on this machine; it has no port, no address and no route. The CSP, the `webRequest` block and
+the renderer are untouched: agent operations reach the renderer through the same IPC channels
+as menu actions, and the offline e2e spec still records zero non-local requests with the
+bridge on.
+
+The bundled MCP server (`Contents/Resources/mcp/index.js`) runs as a separate Node process
+only when an MCP client starts it. It opens the Unix socket and its own stdio, nothing else.
+Its bundle contains the MCP SDK and zod, whose sources carry **spec URLs as string
+constants** (`json-schema.org`, `standardschema.dev`, `github.com`, `openid.net`…) used as
+schema identifiers; none is fetched. The spot check below lists them; that is expected.
+
 ## Verifying offline behaviour
 
 ### Automated
@@ -94,6 +110,9 @@ git diff main -- src electron.vite.config.ts | grep -nE 'https?://'
 
 # Remote URLs in the built renderer (expect only links shown to the user, e.g. GitHub)
 pnpm exec electron-vite build && grep -rhoE 'https?://[a-zA-Z0-9.-]+' out/renderer | sort | uniq -c
+
+# Remote URLs in the MCP server bundle (expect spec identifiers only: json-schema.org, standardschema.dev, …)
+grep -ohE 'https?://[a-zA-Z0-9.-]+' out/main/mcp.js | sort | uniq -c
 ```
 
 ## Rules

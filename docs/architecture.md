@@ -18,7 +18,15 @@ flowchart LR
     fio["fileio.ts<br/>atomicWrite"]
     rec["recovery.ts<br/>journal"]
     finder["finder.ts<br/>open-file, single instance"]
+    agent["agent.ts<br/>bridge on/off, setup dialog"]
+    asrv["agentServer.ts<br/>Unix socket, NDJSON,<br/>validation"]
+    settings["settings.ts<br/>userData/settings.json"]
   end
+
+  subgraph MCP["MCP server process (ELECTRON_RUN_AS_NODE)"]
+    mcp["src/mcp: 8 tools<br/>Resources/mcp/index.js"]
+  end
+  client["MCP client<br/>(Claude Code, Cursor, …)"]
 
   subgraph Win["BrowserWindow (one per window)"]
     pre["preload/index.ts<br/>window.sketchbook"]
@@ -47,6 +55,13 @@ flowchart LR
   fio --> disk
   rec --> disk
   proto -->|"serves out/renderer"| R
+  idx --> agent
+  agent --> asrv
+  agent --> settings
+  asrv -->|"AgentHost"| docs
+  docs -->|"agent:request / agent:response"| pre
+  client <-->|"stdio (MCP)"| mcp
+  mcp <-->|"userData/agent/agent.sock"| asrv
 ```
 
 ### Who owns what
@@ -61,6 +76,9 @@ flowchart LR
 | Tab order, active tab, tab-strip UI               | Renderer                                    |
 | Scene contents, undo history, Excalidraw UI state | Renderer (`DocumentEditor` / `useDocument`) |
 | Theme preference, shape library                   | Renderer (`localStorage`, never scene data) |
+| Agent bridge on/off (`userData/settings.json`)    | Main (`agent.ts`, `settings.ts`)            |
+| Agent socket, pointer file, request validation    | Main (`agentServer.ts`)                     |
+| Applying an agent edit to a scene                 | Renderer (`agentOps.ts`, via Excalidraw)    |
 
 ### Windows and tabs
 
@@ -100,6 +118,12 @@ and the gotchas in [AGENTS.md](../AGENTS.md).
 - Navigation away from the app is blocked; `window.open` is denied. External links go through
   `shell.openExternal` for `http:`, `https:` and `mailto:` only.
 - Offline enforcement (CSP and `webRequest` block) is described in [offline.md](offline.md).
+- The agent bridge is off by default. When on, main listens on a Unix domain socket in
+  `userData/agent/` (directory `0700`, socket `0600`: same user only) and validates every
+  line it receives, method and parameters, with the same rigour as IPC before touching a
+  document. Agents name drawings by `docId` and never send paths. A Unix socket is local
+  IPC, not a network listener. See [agent-bridge.md](agent-bridge.md#security-model) and
+  [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md).
 
 ## Flows
 
@@ -255,6 +279,40 @@ sequenceDiagram
 Corrupt journals are moved to `userData/recovery/corrupt/` so they never block startup.
 See [ADR 0005](adr/0005-recovery-journal.md).
 
+### Agent edit
+
+An MCP client (Claude Code, Claude Desktop, Cursor, Codex) runs the bundled server with the
+app binary in node mode; the server talks to the running app over a Unix socket. Enabled by
+**Agent ▸ Allow Agent Connections**. Guide: [agent-bridge.md](agent-bridge.md).
+
+```mermaid
+sequenceDiagram
+  participant C as MCP client
+  participant S as MCP server (Resources/mcp/index.js)
+  participant M as Main
+  participant R as Renderer
+  C->>S: tools/call add_elements {elements}
+  S->>S: read userData/agent/agent.json, check pid
+  S->>M: agent.sock: {id, method "addElements", params}
+  M->>M: parseFrame, validateParams (limits, types)
+  alt listTabs or newDrawing
+    M->>M: answer from the registry (newDrawing adds a tab without raising the window)
+  else per-document op
+    M->>M: resolve docId (default: active doc of the focused window), activate it
+    M->>R: onActivateDoc(docId), then agent:request {requestId, docId, op, params}
+    R->>R: activate tab, remount if evicted, wait for the editor (≤ 10 s)
+    R->>R: validate elements, build them, updateScene(captureUpdate IMMEDIATELY)
+    R->>R: onChange → dirty, autosave (as for a user edit)
+    R->>M: agent:response {requestId, ok, result}
+  end
+  M-->>S: {id, result} or {id, error {code, message}}
+  S-->>C: JSON text, or PNG image for get_image, or isError "CODE: message"
+```
+
+Main times a per-document op out after 15 s (45 s for `exportImage`) and rejects pending
+ops when the window closes. Each add, update or delete is one undo step; the user's file still
+only changes on ⌘S.
+
 ## Known fragile spots
 
 - **`src/renderer/src/portalGuard.ts`.** Excalidraw 0.18 keeps some UI state (notably the
@@ -269,8 +327,14 @@ See [ADR 0005](adr/0005-recovery-journal.md).
 - **Build-time patches to Excalidraw** in `electron.vite.config.ts` (CDN font fallback,
   embind `new Function`, subset-worker chunk). They throw and fail the build if Excalidraw's
   code changes shape.
+- **`src/renderer/src/agentOps.ts`** builds agent edits with Excalidraw's exported helpers
+  (`convertToExcalidrawElements`, `restoreElements`, `newElementWith`, `exportToBlob`) and
+  relies on `updateScene` replacing the whole element list, mutating `index` on new elements
+  and recording one undo step with `captureUpdate: IMMEDIATELY`. Arrow bindings and label
+  containers are assembled by hand in `agentScene.ts` to match 0.18's element shapes. None of
+  that is a stable API; the e2e agent spec is what catches a change.
 
-Both are on the checklist in [upgrading-excalidraw.md](upgrading-excalidraw.md).
+All three are on the checklist in [upgrading-excalidraw.md](upgrading-excalidraw.md).
 
 ## Further reading
 

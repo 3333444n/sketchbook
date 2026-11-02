@@ -11,6 +11,13 @@
 - Automated checks: typecheck, lint, Vitest unit tests and Playwright e2e (offline, documents,
   tabs, rename, export, packaged smoke test) all pass locally. CI runs typecheck, unit tests
   and the build, and packages the dmg on `v*` tags.
+- **Unreleased (on `main` after v1.0.0): the agent bridge.** An opt-in Unix socket plus a
+  bundled MCP server so local agents (Claude Code, Claude Desktop, Cursor, Codex) can read and
+  edit the open drawing and get a PNG back ([agent-bridge.md](agent-bridge.md),
+  [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md)). Unit-tested on every side
+  (settings, socket server, config snippets, scene helpers, MCP server and client); the e2e
+  spec and the packaged MCP smoke test are described in [testing.md](testing.md). It ships
+  with the next release.
 
 ### Not verified by automation
 
@@ -21,6 +28,10 @@ These were checked by hand at most, or not at all. Re-check them when touching t
 - Double-clicking a `.excalidraw` file in Finder (cold start and while running).
 - Close/quit prompts on dirty tabs, switching past the 5-editor budget, and recovery after a
   crash (listed in [testing.md](testing.md#manual-checklist-before-a-release)).
+- Agent bridge, end to end with a real MCP client: Claude Code connected to the packaged app
+  with Wi-Fi off, one ⌘Z per agent call, dirty marker and autosave, disabling the bridge
+  mid-session (the agent gets `DISABLED`), the setting surviving a relaunch, and the
+  `userData` path fallback to the temp directory for very long profile paths.
 
 ## Ideas for next iterations
 
@@ -51,3 +62,7 @@ Options:
 - **More e2e tests** for the gaps listed above (close/quit prompts, eviction, crash recovery).
 - **Keep undo history across eviction**, or make the budget configurable (measure first; see
   [performance.md](performance.md)).
+- **Agent bridge follow-ups:** let agents add images (today `image` needs a `fileId` already
+  in the drawing), a per-connection approval or activity indicator in the tab strip, and a
+  `get_image` of just the viewport. Each is a new validated surface; see
+  [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md).

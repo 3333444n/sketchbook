@@ -25,6 +25,8 @@ renderer reaches it through [`src/renderer/src/bridge.ts`](../src/renderer/src/b
 | `RenameResult`  | `{ path: string \| null; title: string } \| null`                                               | Answer to `renameDoc`.                                                                                                                                                                                                                                                    |
 | `CloseDecision` | `'close' \| 'save' \| 'cancel'`                                                                 | Answer to `requestCloseDoc`.                                                                                                                                                                                                                                              |
 | `InitialState`  | `{ docs, activeDocId, fullScreen }`                                                             | `docs` always has at least one entry.                                                                                                                                                                                                                                     |
+| `AgentRequest`  | `{ requestId, docId, op, params }`                                                              | A per-document agent operation (`op` is an `AgentDocOp` from `src/shared/agent.ts`: `getScene`, `addElements`, `updateElements`, `deleteElements`, `exportImage`, `scrollTo`). `params` is forwarded as received from the socket after main's validation.                 |
+| `AgentResponse` | `{ requestId, ok: true, result } \| { requestId, ok: false, error: { code, message } }`         | Exactly one per `requestId`. `error.code` is an `AgentErrorCode`.                                                                                                                                                                                                         |
 
 ## Channels
 
@@ -33,18 +35,20 @@ promise (`ipcRenderer.invoke` / `ipcMain.handle`); "send" is fire-and-forget.
 
 ### Window-level
 
-| API                      | Channel                 | Kind       | Purpose                                                                                                                                                                                           |
-| ------------------------ | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getInitialState()`      | `win:get-initial-state` | R→M invoke | Tabs to show at startup, which is active, and whether the window is full screen. Recovered docs arrive here with `recovered: true`.                                                               |
-| `onOpenDocs(cb)`         | `win:open-docs`         | M→R        | Add `docs` as tabs and activate `activeDocId`. If a payload's `docId` matches an existing tab, **replace** that tab's document (main does this when opening a file into a pristine untitled tab). |
-| `onActivateDoc(cb)`      | `win:activate-doc`      | M→R        | Switch to an existing tab (file already open, or main is about to prompt about it).                                                                                                               |
-| `onSaveAndClose(cb)`     | `win:save-and-close`    | M→R        | The user chose Save in main's close-window/quit prompt. Save the doc (not Save As); main finishes the close when the save succeeds.                                                               |
-| `onMenu(cb)`             | `win:menu-action`       | M→R        | A native menu action for the active tab.                                                                                                                                                          |
-| `onFullScreenChange(cb)` | `win:full-screen`       | M→R        | Full screen toggled; the tab strip drops its traffic-light inset while full screen.                                                                                                               |
-| `open()`                 | `win:open`              | R→M send   | Show the native Open dialog; results open as tabs in this window.                                                                                                                                 |
-| `newTab()`               | `win:new-tab`           | R→M send   | Ask for a new untitled tab; it arrives via `onOpenDocs`.                                                                                                                                          |
-| `newWindow()`            | `win:new-window`        | R→M send   | Open a new window with one untitled tab.                                                                                                                                                          |
-| `openExternal(url)`      | `shell:open-external`   | R→M send   | Open an `http:`, `https:` or `mailto:` URL in the system browser. Anything else is ignored.                                                                                                       |
+| API                      | Channel                 | Kind       | Purpose                                                                                                                                                                                                                                                 |
+| ------------------------ | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getInitialState()`      | `win:get-initial-state` | R→M invoke | Tabs to show at startup, which is active, and whether the window is full screen. Recovered docs arrive here with `recovered: true`.                                                                                                                     |
+| `onOpenDocs(cb)`         | `win:open-docs`         | M→R        | Add `docs` as tabs and activate `activeDocId`. If a payload's `docId` matches an existing tab, **replace** that tab's document (main does this when opening a file into a pristine untitled tab).                                                       |
+| `onActivateDoc(cb)`      | `win:activate-doc`      | M→R        | Switch to an existing tab (file already open, or main is about to prompt about it).                                                                                                                                                                     |
+| `onSaveAndClose(cb)`     | `win:save-and-close`    | M→R        | The user chose Save in main's close-window/quit prompt. Save the doc (not Save As); main finishes the close when the save succeeds.                                                                                                                     |
+| `onMenu(cb)`             | `win:menu-action`       | M→R        | A native menu action for the active tab.                                                                                                                                                                                                                |
+| `onFullScreenChange(cb)` | `win:full-screen`       | M→R        | Full screen toggled; the tab strip drops its traffic-light inset while full screen.                                                                                                                                                                     |
+| `open()`                 | `win:open`              | R→M send   | Show the native Open dialog; results open as tabs in this window.                                                                                                                                                                                       |
+| `newTab()`               | `win:new-tab`           | R→M send   | Ask for a new untitled tab; it arrives via `onOpenDocs`.                                                                                                                                                                                                |
+| `newWindow()`            | `win:new-window`        | R→M send   | Open a new window with one untitled tab.                                                                                                                                                                                                                |
+| `openExternal(url)`      | `shell:open-external`   | R→M send   | Open an `http:`, `https:` or `mailto:` URL in the system browser. Anything else is ignored.                                                                                                                                                             |
+| `onAgentRequest(cb)`     | `agent:request`         | M→R        | An agent operation for one of this window's docs ([agent-bridge.md](agent-bridge.md)). Main has already activated the tab in its registry and sent `onActivateDoc`. The renderer activates the tab, waits for its editor, runs the op and answers once. |
+| `agentResponse(res)`     | `agent:response`        | R→M send   | The answer to an `AgentRequest`. Main only accepts it from the window the request was sent to and drops unknown or already-settled `requestId`s.                                                                                                        |
 
 ### Per-document
 
@@ -61,6 +65,16 @@ the sending window.
 | `renameDoc(docId, name)`            | `doc:rename`        | R→M invoke | Rename the doc. Saved docs: main renames the file in place (same folder and extension; refuses if the name is taken, with a warning). Untitled docs: the name becomes the title and default Save name. Resolves `RenameResult` (`{ path, title }`, or `null` if invalid or failed). |
 | `requestCloseDoc(docId)`            | `doc:request-close` | R→M invoke | Ask whether the tab may close. Main prompts if dirty and returns a `CloseDecision`.                                                                                                                                                                                                 |
 | `docClosed(docId)`                  | `doc:closed`        | R→M send   | The tab is gone from the UI. Main forgets the doc and deletes its journal; if it was the window's last tab, main closes the window.                                                                                                                                                 |
+
+### Agent requests
+
+`agent:request` / `agent:response` are the IPC half of the agent bridge. Main receives agent
+calls over a Unix socket (`userData/agent/agent.sock`), validates each one there (method,
+parameter types, limits, `docId` ownership) exactly as it validates IPC, answers `listTabs`
+and `newDrawing` itself, and forwards per-document ops to the hosting window with a fresh
+`requestId` and a timeout (15 s; 45 s for `exportImage`). Pending requests are rejected when
+the window closes or its renderer crashes. The socket protocol, methods, limits and error
+codes are in [agent-bridge.md](agent-bridge.md#socket-protocol).
 
 ## Handling a `CloseDecision`
 

@@ -14,6 +14,34 @@ pnpm build:mac     # typecheck, electron-vite build, electron-builder --mac
 - The build is **ad-hoc signed** (`identity: "-"`), with hardened runtime and notarization off.
   Ad-hoc signing is required for arm64 binaries to run at all, but it is not a Developer ID
   signature, so Gatekeeper treats the app as from an unidentified developer.
+- `electron-vite build` emits two main-side files: `out/main/index.js` (the app) and
+  `out/main/mcp.js` (the self-contained MCP server, about 930 kB). The build fails if `mcp.js`
+  is not self-contained. electron-builder excludes `mcp.js` from the asar and copies it to
+  `Sketchbook.app/Contents/Resources/mcp/index.js` via `extraResources`, so MCP clients can
+  run it by path.
+- The MCP server is started by clients as
+  `ELECTRON_RUN_AS_NODE=1 Sketchbook.app/Contents/MacOS/Sketchbook …/Resources/mcp/index.js`,
+  which needs Electron's `runAsNode` fuse (on by default). **Never set
+  `electronFuses.runAsNode: false`** in `electron-builder.yml`.
+
+### Smoke-testing the packaged MCP server
+
+After `pnpm build:mac` (or `pnpm build:unpack`), with the app **closed**:
+
+```bash
+APP=dist/mac-arm64/Sketchbook.app
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/Sketchbook" "$APP/Contents/Resources/mcp/index.js"
+```
+
+Expect two JSON-RPC responses on stdout, the second listing eight tools (`list_drawings` …
+`scroll_to`), and no window. `tests/e2e/packaged.spec.ts` does the same through the MCP SDK's
+stdio client and also checks that `list_drawings` fails with a friendly `NOT_RUNNING` /
+`DISABLED` text while the app is closed. Then open the app, turn on **Agent ▸ Allow Agent
+Connections** and run the manual check in [testing.md](testing.md#manual-checklist-before-a-release).
 
 ## Release
 
@@ -37,7 +65,8 @@ this way, with the dmg built locally.
 
 There is **no auto-update and no update check**. Users install a new version by downloading
 the new dmg and dragging Sketchbook to Applications again (Replace). Drawings are separate
-files and settings live in `~/Library/Application Support/sketchbook`, so both survive. The
+files and settings live in `~/Library/Application Support/Sketchbook` (the agent-bridge
+setting and socket included), so both survive. The
 options for adding an update mechanism, and why true auto-update needs Developer ID signing,
 are in [roadmap.md](roadmap.md#updates).
 

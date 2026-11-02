@@ -8,7 +8,10 @@ Sketchbook is an offline macOS (Apple Silicon) desktop whiteboard. It is an Elec
 embeds the MIT-licensed [`@excalidraw/excalidraw`](https://github.com/excalidraw/excalidraw)
 component (0.18.1) as an npm dependency. We do not fork excalidraw-app; the pieces that only
 exist there (persistence, welcome screen, main menu) are rebuilt here. Collaboration, share
-links, AI and online library browsing are out of scope.
+links, Excalidraw's hosted AI features and online library browsing are out of scope. Instead,
+an opt-in local agent bridge lets MCP clients (Claude Code, Claude Desktop, Cursor, Codex)
+read and edit the open drawing through a bundled MCP server
+([docs/agent-bridge.md](docs/agent-bridge.md)).
 
 Stack: Electron 44.9.3, electron-vite 6, React 19, TypeScript, pnpm, Node 24,
 electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
@@ -21,36 +24,44 @@ steps (update mechanism, signing, CI coverage): [docs/roadmap.md](docs/roadmap.m
 
 ## Repo map
 
-| Path                                  | What                                                                                                                   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `src/shared/ipc.ts`                   | **The IPC contract (v2: tabs).** Types plus channel names. Every layer codes against it.                               |
-| `src/shared/chrome.ts`                | Window-chrome geometry (tab-strip height, traffic-light inset and position) shared by main and renderer.               |
-| `src/preload/index.ts`                | Implements `SketchbookAPI` on `window.sketchbook` via `contextBridge`.                                                 |
-| `src/main/index.ts`                   | Thin bootstrap: scheme registration, `initDocuments()`, `buildMenu()`.                                                 |
-| `src/main/protocol.ts`                | `app://bundle/` scheme and renderer loading.                                                                           |
-| `src/main/documents.ts`               | Windows, open/save, close/quit prompts, IPC handlers, link policy.                                                     |
-| `src/main/registry.ts`                | Pure window/doc registry (which docs live in which window, paths, dirty, active). No `electron` import.                |
-| `src/main/fileio.ts`                  | Pure file helpers: `atomicWrite`, extensions, titles, `sanitizeFileName`, `readDocContents`. No `electron` import.     |
-| `src/main/recovery.ts`                | Crash-recovery journal in `userData/recovery/`. No `electron` import.                                                  |
-| `src/main/finder.ts`                  | Single-instance lock, `open-file`, argv paths.                                                                         |
-| `src/main/downloads.ts`               | `will-download` → native Save dialog (image export, library export).                                                   |
-| `src/main/menu.ts`                    | Native application menu and accelerators.                                                                              |
-| `src/main/__tests__/`                 | Vitest unit tests (node environment).                                                                                  |
-| `src/renderer/index.html`             | Renderer entry; **the CSP meta tag lives here**.                                                                       |
-| `src/renderer/public/boot.js`         | Classic script run before the bundle: sets `EXCALIDRAW_ASSET_PATH`, hides the File System Access API.                  |
-| `src/renderer/src/App.tsx`            | Window shell: tab model, MRU editor budget, theme, library, shared shortcuts.                                          |
-| `src/renderer/src/tabs.ts`            | Types shared by App and its editors (`EditorHandle`, `EditorSnapshot`, `EditorEvents`).                                |
-| `src/renderer/src/DocumentEditor.tsx` | One drawing: an `<Excalidraw>` instance plus its lifecycle.                                                            |
-| `src/renderer/src/useDocument.ts`     | Per-document state: load, dirty/empty, debounced autosave, save.                                                       |
-| `src/renderer/src/bridge.ts`          | Thin adapter over `window.sketchbook`.                                                                                 |
-| `src/renderer/src/shortcuts.ts`       | Capture-phase key handlers: yield menu-owned keys to the native menu, ⌘1–⌘9, stray-key forwarding.                     |
-| `src/renderer/src/portalGuard.ts`     | Hides dialog portals that belong to hidden editors (see Gotchas).                                                      |
-| `src/renderer/src/components/`        | `TabStrip` (incl. double-click rename), `AppMainMenu`, `AppWelcomeScreen`, icons.                                      |
-| `electron.vite.config.ts`             | Build, including the Excalidraw offline patches (see Gotchas).                                                         |
-| `electron-builder.yml`                | Packaging (ad-hoc-signed arm64 dmg, `.excalidraw` file association).                                                   |
-| `tests/e2e/`, `playwright.config.ts`  | Playwright `_electron` tests against the production build.                                                             |
-| `scripts/screenshots.mjs`             | Regenerates the README images in `docs/images/` (`pnpm screenshots`).                                                  |
-| `docs/`                               | Architecture, IPC reference, offline, performance, testing, release, upgrading Excalidraw, [ADRs](docs/adr/README.md). |
+| Path                                  | What                                                                                                                                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/shared/ipc.ts`                   | **The IPC contract (v2: tabs).** Types plus channel names. Every layer codes against it.                                                                                                                     |
+| `src/shared/chrome.ts`                | Window-chrome geometry (tab-strip height, traffic-light inset and position) shared by main and renderer.                                                                                                     |
+| `src/shared/agent.ts`                 | **The agent bridge contract.** Type-only (methods, results, error codes, limits as comments); main, renderer and `src/mcp` code against it.                                                                  |
+| `src/preload/index.ts`                | Implements `SketchbookAPI` on `window.sketchbook` via `contextBridge`.                                                                                                                                       |
+| `src/main/index.ts`                   | Thin bootstrap: scheme registration, `initDocuments()`, `buildMenu()`.                                                                                                                                       |
+| `src/main/protocol.ts`                | `app://bundle/` scheme and renderer loading.                                                                                                                                                                 |
+| `src/main/documents.ts`               | Windows, open/save, close/quit prompts, IPC handlers, link policy.                                                                                                                                           |
+| `src/main/registry.ts`                | Pure window/doc registry (which docs live in which window, paths, dirty, active). No `electron` import.                                                                                                      |
+| `src/main/fileio.ts`                  | Pure file helpers: `atomicWrite`, extensions, titles, `sanitizeFileName`, `readDocContents`. No `electron` import.                                                                                           |
+| `src/main/recovery.ts`                | Crash-recovery journal in `userData/recovery/`. No `electron` import.                                                                                                                                        |
+| `src/main/finder.ts`                  | Single-instance lock, `open-file`, argv paths.                                                                                                                                                               |
+| `src/main/downloads.ts`               | `will-download` → native Save dialog (image export, library export).                                                                                                                                         |
+| `src/main/menu.ts`                    | Native application menu and accelerators, including the Agent menu.                                                                                                                                          |
+| `src/main/settings.ts`                | `userData/settings.json` (`allowAgentConnections`). Pure; no `electron` import.                                                                                                                              |
+| `src/main/agentServer.ts`             | Unix-socket NDJSON server: framing, `parseFrame`, `validateParams`, limits, pointer file, stale-socket cleanup. No `electron` import.                                                                        |
+| `src/main/agent.ts`                   | Electron glue for the bridge: start/stop from settings, `AgentHost` over the documents facade, "Set Up Agent Access…" dialog.                                                                                |
+| `src/main/agentConfig.ts`             | Config snippets (`mcpServers` JSON, `claude mcp add` one-liner). Pure.                                                                                                                                       |
+| `src/main/__tests__/`                 | Vitest unit tests (node environment).                                                                                                                                                                        |
+| `src/renderer/index.html`             | Renderer entry; **the CSP meta tag lives here**.                                                                                                                                                             |
+| `src/renderer/public/boot.js`         | Classic script run before the bundle: sets `EXCALIDRAW_ASSET_PATH`, hides the File System Access API.                                                                                                        |
+| `src/renderer/src/App.tsx`            | Window shell: tab model, MRU editor budget, theme, library, shared shortcuts.                                                                                                                                |
+| `src/renderer/src/tabs.ts`            | Types shared by App and its editors (`EditorHandle`, `EditorSnapshot`, `EditorEvents`).                                                                                                                      |
+| `src/renderer/src/DocumentEditor.tsx` | One drawing: an `<Excalidraw>` instance plus its lifecycle.                                                                                                                                                  |
+| `src/renderer/src/useDocument.ts`     | Per-document state: load, dirty/empty, debounced autosave, save.                                                                                                                                             |
+| `src/renderer/src/bridge.ts`          | Thin adapter over `window.sketchbook`.                                                                                                                                                                       |
+| `src/renderer/src/shortcuts.ts`       | Capture-phase key handlers: yield menu-owned keys to the native menu, ⌘1–⌘9, stray-key forwarding.                                                                                                           |
+| `src/renderer/src/portalGuard.ts`     | Hides dialog portals that belong to hidden editors (see Gotchas).                                                                                                                                            |
+| `src/renderer/src/agentOps.ts`        | The per-document agent ops (`getScene`, `addElements`, `updateElements`, `deleteElements`, `exportImage`, `scrollTo`) against one editor's Excalidraw API; each edit is one undo step.                       |
+| `src/renderer/src/agentScene.ts`      | Pure helpers for `agentOps`: summaries, bounds, skeleton/patch validation, delete planning, arrow routing. Type-only imports, node-testable.                                                                 |
+| `src/renderer/src/components/`        | `TabStrip` (incl. double-click rename), `AppMainMenu`, `AppWelcomeScreen`, icons.                                                                                                                            |
+| `src/mcp/`                            | The bundled stdio MCP server: `server.ts` (8 tools, zod), `client.ts` (pointer file, socket RPC), `index.ts`. Built to `out/main/mcp.js`, shipped as `Resources/mcp/index.js`. **Never imports `electron`.** |
+| `electron.vite.config.ts`             | Build, including the Excalidraw offline patches (see Gotchas).                                                                                                                                               |
+| `electron-builder.yml`                | Packaging (ad-hoc-signed arm64 dmg, `.excalidraw` file association).                                                                                                                                         |
+| `tests/e2e/`, `playwright.config.ts`  | Playwright `_electron` tests against the production build.                                                                                                                                                   |
+| `scripts/screenshots.mjs`             | Regenerates the README images in `docs/images/` (`pnpm screenshots`).                                                                                                                                        |
+| `docs/`                               | Architecture, IPC reference, offline, performance, testing, release, upgrading Excalidraw, [ADRs](docs/adr/README.md).                                                                                       |
 
 ## Commands
 
@@ -62,6 +73,7 @@ pnpm typecheck     # tsc for node (main/preload/shared) and web (renderer)
 pnpm test          # Vitest unit tests
 pnpm test:e2e      # build, then Playwright _electron e2e against the production build
 pnpm screenshots   # build, then regenerate docs/images/*.png
+pnpm mcp           # run the built MCP server on stdio (node out/main/mcp.js; build first)
 pnpm build:mac     # typecheck + build + arm64 dmg in dist/
 ```
 
@@ -84,7 +96,9 @@ Details: [docs/architecture.md](docs/architecture.md), [docs/ipc-contract.md](do
 ## Rules
 
 1. **Never add network calls.** No remote URLs, CDNs, telemetry, update checks or font
-   fetches. The app must work with Wi-Fi off. See [docs/offline.md](docs/offline.md).
+   fetches. The app must work with Wi-Fi off. See [docs/offline.md](docs/offline.md). The
+   agent bridge's Unix domain socket is local IPC (a file in `userData/agent/`), not a
+   network listener; it does not relax this rule.
 2. **Never write to a renderer-supplied path.** Main writes only to paths it got from its own
    dialog or already tracks for that doc. The renderer sends contents and a `docId`, never a path.
    The only renderer text that reaches a path is a tab rename: main runs it through
@@ -104,6 +118,19 @@ Details: [docs/architecture.md](docs/architecture.md), [docs/ipc-contract.md](do
    for `http:`, `https:` and `mailto:`.
 9. Product name is "Sketchbook". Don't use the Excalidraw name or logo as branding; keep the
    "Built with Excalidraw (MIT)" credit.
+10. **Socket requests are validated in main like IPC.** Every line on `agent.sock` goes
+    through `parseFrame` and `validateParams` in `src/main/agentServer.ts` (method list,
+    types, limits, `docId` pattern) before it reaches a document; the renderer validates
+    element shapes again in `agentScene.ts`. New methods or parameters get guards on both
+    sides and a zod schema in `src/mcp/server.ts`, with the same limits.
+11. **`src/mcp/` never imports `electron`** and shares no runtime module with `src/main`
+    (type imports are fine). `out/main/mcp.js` is copied out of the build as one file, so a
+    split chunk would break it; the `mcpSelfContained` plugin fails the build if that happens.
+12. **`src/shared/agent.ts` stays type-only.** No runtime exports, no imports; limits are
+    literals repeated on each side (and listed in its header comment). Enforced by the same
+    build plugin.
+13. **Never set `electronFuses.runAsNode: false`** in `electron-builder.yml`. The bundled MCP
+    server runs the app binary with `ELECTRON_RUN_AS_NODE=1`.
 
 ## Gotchas
 
@@ -146,6 +173,21 @@ Details: [docs/architecture.md](docs/architecture.md), [docs/ipc-contract.md](do
   run them in plain Node.
 - Under `file://` the origin is `"null"`, which breaks Excalidraw's asset path and workers.
   Production loads from `app://bundle/`; dev loads the Vite URL.
+- **The build asserts `out/main/mcp.js` is self-contained.** If `electron-vite build` fails
+  with "must be self-contained", something in `src/mcp/` (or `src/shared/agent.ts`) pulled in
+  a runtime module that main also imports, or `electron`. Inline it or make it type-only.
+- **Agent ops activate the target tab.** `rendererRequest` in `documents.ts` sets the doc
+  active and sends `onActivateDoc` before `agent:request`, and the renderer calls
+  `activate(docId)` again; the window is never raised. Don't "optimise" this away: hidden
+  editors don't handle input and evicted ones aren't mounted.
+- **Eviction and the mount wait.** A tab past the 5-editor budget has no editor; the renderer
+  waits up to 10 s (`waitForEditor`, polling `getApi()` and `!isLoading`) before answering
+  `NOT_READY`. Main's own timeout is 15 s (45 s for `exportImage`), so the renderer always
+  answers first. Ops on one doc run one at a time (per-doc promise queue in `App.tsx`).
+- **Never `console.log` in `src/mcp/`.** stdout is the MCP transport; use `console.error`.
+- **Dev and packaged apps use different profiles:** `~/Library/Application Support/sketchbook`
+  (dev, from `package.json` name) vs `…/Sketchbook` (packaged). The MCP client tries
+  `Sketchbook` first; set `SKETCHBOOK_USER_DATA` to pick one.
 
 ## Verifying a change
 
