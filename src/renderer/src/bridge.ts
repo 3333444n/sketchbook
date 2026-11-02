@@ -2,6 +2,8 @@
 // The rest of the renderer talks to main only through this object.
 
 import type {
+  AgentRequest,
+  AgentResponse,
   CloseDecision,
   DocPayload,
   InitialState,
@@ -28,6 +30,8 @@ export const bridge = {
   newTab: (): void => api().newTab(),
   newWindow: (): void => api().newWindow(),
   openExternal: (url: string): void => api().openExternal(url),
+  onAgentRequest: (cb: (req: AgentRequest) => void): Unsubscribe => api().onAgentRequest(cb),
+  agentResponse: (res: AgentResponse): void => api().agentResponse(res),
 
   // ---- per-document ----
   setActiveDoc: (docId: string): void => api().setActiveDoc(docId),

@@ -6,6 +6,8 @@
 // dirty state. The renderer owns tab order, the active tab and the tab-strip UI,
 // and reports the active tab back to main.
 
+import type { AgentDocOp, AgentError } from './agent'
+
 /** A document as handed to a renderer window. */
 export type DocPayload = {
   /** Stable id for the document (also the recovery journal key). */
@@ -54,6 +56,17 @@ export type RenameResult = { path: string | null; title: string } | null
  */
 export type CloseDecision = 'close' | 'save' | 'cancel'
 
+/**
+ * A per-document agent operation main forwards to the window that hosts `docId`
+ * (see `src/shared/agent.ts`). The renderer activates the tab, runs the op and
+ * answers with exactly one `AgentResponse` carrying the same `requestId`.
+ */
+export type AgentRequest = { requestId: string; docId: string; op: AgentDocOp; params: unknown }
+
+export type AgentResponse =
+  | { requestId: string; ok: true; result: unknown }
+  | { requestId: string; ok: false; error: AgentError }
+
 export type InitialState = {
   docs: DocPayload[]
   /** Which of `docs` to show first. */
@@ -92,6 +105,10 @@ export interface SketchbookAPI {
   newWindow(): void
   /** Open an http(s)/mailto URL in the system browser. */
   openExternal(url: string): void
+  /** Main forwards an agent operation for one of this window's docs. */
+  onAgentRequest(cb: (req: AgentRequest) => void): () => void
+  /** Answer an agent request (exactly once per `requestId`). */
+  agentResponse(res: AgentResponse): void
 
   // ---- per-document ----------------------------------------------------------
   /** Tell main which tab is active (drives window title, proxy icon, menu target). */
@@ -132,6 +149,8 @@ export const IPC = {
   newTab: 'win:new-tab',
   newWindow: 'win:new-window',
   openExternal: 'shell:open-external',
+  agentRequest: 'agent:request',
+  agentResponse: 'agent:response',
 
   setActiveDoc: 'doc:set-active',
   save: 'doc:save',

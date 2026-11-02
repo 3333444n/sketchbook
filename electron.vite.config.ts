@@ -5,6 +5,8 @@ import { normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
+const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { version: string }
+
 /**
  * The production CSP lives in src/renderer/index.html. The Vite dev server needs
  * an inline react-refresh preamble and an HMR websocket, so in `serve` mode only
@@ -157,11 +159,54 @@ const SUBSET_DEPS_RE = new RegExp(
   ).join('|')})$`
 )
 
+/**
+ * The MCP server entry (src/mcp/index.ts → out/main/mcp.js) is copied out of
+ * out/ on its own by electron-builder (extraResources → Resources/mcp/index.js)
+ * and run with ELECTRON_RUN_AS_NODE. Any runtime module shared between
+ * src/main and src/mcp would be split by rolldown into out/main/chunks/, which
+ * is not next to the copied file, and a `require("electron")` would throw in
+ * node mode. Fail the build instead of shipping a broken server.
+ */
+function mcpSelfContained(): Plugin {
+  return {
+    name: 'sketchbook-mcp-self-contained',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunk = Object.values(bundle).find((c) => c.type === 'chunk' && c.fileName === 'mcp.js')
+      if (!chunk || chunk.type !== 'chunk') {
+        throw new Error(
+          '[sketchbook] out/main/mcp.js was not emitted; check build.rolldownOptions.input'
+        )
+      }
+      if (
+        chunk.imports.length ||
+        chunk.dynamicImports.length ||
+        /require\(["']electron["']\)/.test(chunk.code)
+      ) {
+        throw new Error(
+          'out/main/mcp.js must be self-contained; keep src/shared/agent.ts type-only and share no runtime modules between main and mcp'
+        )
+      }
+    }
+  }
+}
+
 export default defineConfig({
   // Bundle main/preload dependencies into out/ so the packaged app needs no
   // node_modules at all (electron-builder.yml excludes them; the renderer is
   // fully bundled by Vite). Keeps the .app small and self-contained.
-  main: { build: { externalizeDeps: false } },
+  main: {
+    define: { __SKETCHBOOK_VERSION__: JSON.stringify(pkg.version) },
+    plugins: [mcpSelfContained()],
+    build: {
+      externalizeDeps: false,
+      // Two entries: the Electron main process (package.json "main" points at
+      // out/main/index.js) and the standalone MCP server (out/main/mcp.js).
+      rolldownOptions: {
+        input: { index: resolve('src/main/index.ts'), mcp: resolve('src/mcp/index.ts') }
+      }
+    }
+  },
   preload: { build: { externalizeDeps: false } },
   renderer: {
     resolve: {
