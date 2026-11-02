@@ -19,15 +19,18 @@ connect while the bridge is off.
 
 ### Turn it on
 
-1. Open Sketchbook and choose **Agent ▸ Allow Agent Connections**. The setting is remembered
-   across launches and is **off by default**.
-2. Choose **Agent ▸ Set Up Agent Access…**. The dialog shows the config for your install with
-   two buttons: **Copy claude mcp add command** (Claude Code) and **Copy JSON** (everything
-   else).
+1. Open Sketchbook and turn on **Allow agent connections**, either from the menu bar
+   (**Agent ▸ Allow Agent Connections**) or from the in-app hamburger menu (the ☰ button in the
+   top-left corner of the canvas). The two always show the same state. The setting is
+   remembered across launches and is **off by default**.
+2. Choose **Set up agent access…** (**Agent ▸ Set Up Agent Access…** in the menu bar, or the
+   item below the checkbox in the hamburger menu). The dialog shows the config for your
+   install with two buttons: **Copy claude mcp add command** (Claude Code) and **Copy JSON**
+   (everything else).
 3. Paste it into your agent's configuration as shown below, then restart or reconnect the
    agent.
 
-Turn it off again with the same menu item. Connected agents are cut off immediately and get a
+Turn it off again with either menu item. Connected agents are cut off immediately and get a
 `DISABLED` error on their next call.
 
 ### Configure your agent
@@ -164,7 +167,9 @@ MCP server process   ELECTRON_RUN_AS_NODE=1 Sketchbook.app/Contents/MacOS/Sketch
    │ Unix socket  userData/agent/agent.sock   NDJSON {id, method, params} ⇄ {id, result | error}
    ▼
 Main      agentServer.ts (net.Server, framing, validation; no electron import)
-          agent.ts (settings, start/stop, setup dialog)  ·  agentConfig.ts (config snippets)
+          agent.ts (settings, start/stop, setup dialog, on/off notifications)  ·  agentConfig.ts (config snippets)
+          menu.ts: native Agent menu  ·  renderer AppMainMenu.tsx: the same two items in the hamburger menu
+          (both call agent.ts' setAgentEnabled; it broadcasts `agent:enabled-changed` to every window)
           documents.ts: listTabs / newDrawing answered from the registry; per-doc ops → rendererRequest()
    │ IPC  agent:request {requestId, docId, op, params}  ⇄  agent:response {requestId, ok, result | error}
    ▼
@@ -280,17 +285,17 @@ does. In `pnpm dev`, **Agent ▸ Set Up Agent Access…** shows the Electron bin
 
 ### Troubleshooting
 
-| Symptom                                               | Cause and fix                                                                                                                                                                                                                             |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tool call returns `DISABLED: …`                       | The setting is off or the settings file is absent in the profile the client looks at, whether or not the app is running. Turn on **Agent ▸ Allow Agent Connections** (or set `SKETCHBOOK_USER_DATA` if the client reads another profile). |
-| `NOT_RUNNING: Sketchbook isn't running…`              | The setting is on but the app is not running, or the pointer belongs to a dead process (the message says "stale"). Start Sketchbook; a stale pointer is replaced when the bridge starts.                                                  |
-| `NOT_RUNNING` with the app running                    | The setting is on in the profile the client reads, but that profile's app is not running (dev vs packaged, or an isolated `--user-data-dir`). Set `SKETCHBOOK_USER_DATA` to the running app's profile.                                    |
-| Stale socket, "another instance is already listening" | A second Sketchbook (for example a dev build with the same profile) owns the socket. Quit it, or toggle the menu item off and on; `agent.sock` and `agent.json` are safe to delete when the app is closed.                                |
-| `NOT_READY`                                           | The tab was still loading (a remount after eviction, or a window still starting). Retry.                                                                                                                                                  |
-| `tools/list` works but every call fails               | Expected with the app closed: the server starts without the app so clients can list tools.                                                                                                                                                |
-| Claude Desktop shows the server as failed             | Check `~/Library/Logs/Claude/mcp*.log` (`mcp-server-sketchbook.log` for this server). Usually a wrong path or a missing `ELECTRON_RUN_AS_NODE` (the app opens a window instead of serving stdio).                                         |
-| The app launched a window when the client started it  | `ELECTRON_RUN_AS_NODE=1` is missing from the client's `env`.                                                                                                                                                                              |
-| Agent edits are not undoable in one step              | They should be; each call is one `captureUpdate: IMMEDIATELY`. Report it with the call that misbehaved.                                                                                                                                   |
+| Symptom                                               | Cause and fix                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool call returns `DISABLED: …`                       | The setting is off or the settings file is absent in the profile the client looks at, whether or not the app is running. Turn on **Allow agent connections** (menu bar or hamburger menu), or set `SKETCHBOOK_USER_DATA` if the client reads another profile. |
+| `NOT_RUNNING: Sketchbook isn't running…`              | The setting is on but the app is not running, or the pointer belongs to a dead process (the message says "stale"). Start Sketchbook; a stale pointer is replaced when the bridge starts.                                                                      |
+| `NOT_RUNNING` with the app running                    | The setting is on in the profile the client reads, but that profile's app is not running (dev vs packaged, or an isolated `--user-data-dir`). Set `SKETCHBOOK_USER_DATA` to the running app's profile.                                                        |
+| Stale socket, "another instance is already listening" | A second Sketchbook (for example a dev build with the same profile) owns the socket. Quit it, or toggle the menu item off and on; `agent.sock` and `agent.json` are safe to delete when the app is closed.                                                    |
+| `NOT_READY`                                           | The tab was still loading (a remount after eviction, or a window still starting). Retry.                                                                                                                                                                      |
+| `tools/list` works but every call fails               | Expected with the app closed: the server starts without the app so clients can list tools.                                                                                                                                                                    |
+| Claude Desktop shows the server as failed             | Check `~/Library/Logs/Claude/mcp*.log` (`mcp-server-sketchbook.log` for this server). Usually a wrong path or a missing `ELECTRON_RUN_AS_NODE` (the app opens a window instead of serving stdio).                                                             |
+| The app launched a window when the client started it  | `ELECTRON_RUN_AS_NODE=1` is missing from the client's `env`.                                                                                                                                                                                                  |
+| Agent edits are not undoable in one step              | They should be; each call is one `captureUpdate: IMMEDIATELY`. Report it with the call that misbehaved.                                                                                                                                                       |
 
 Main logs bridge problems to its stderr with an `[agent]` prefix (visible when the app is run
 from a terminal: `/Applications/Sketchbook.app/Contents/MacOS/Sketchbook`).
