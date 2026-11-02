@@ -16,7 +16,7 @@
   edit the open drawing and get a PNG back ([agent-bridge.md](agent-bridge.md),
   [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md)). Unit-tested on every side
   (settings, socket server, config snippets, scene helpers, MCP server and client); the e2e
-  spec and the packaged MCP smoke test are described in [testing.md](testing.md). It ships
+  spec and the packaged MCP smoke tests pass locally ([testing.md](testing.md)). It ships
   with the next release.
 
 ### Not verified by automation
@@ -28,10 +28,10 @@ These were checked by hand at most, or not at all. Re-check them when touching t
 - Double-clicking a `.excalidraw` file in Finder (cold start and while running).
 - Close/quit prompts on dirty tabs, switching past the 5-editor budget, and recovery after a
   crash (listed in [testing.md](testing.md#manual-checklist-before-a-release)).
-- Agent bridge, end to end with a real MCP client: Claude Code connected to the packaged app
-  with Wi-Fi off, one ⌘Z per agent call, dirty marker and autosave, disabling the bridge
-  mid-session (the agent gets `DISABLED`), the setting surviving a relaunch, and the
-  `userData` path fallback to the temp directory for very long profile paths.
+- Agent bridge: a manual session with a real Claude Code client against the packaged app
+  with Wi-Fi off. (Undo per call, the dirty marker, eviction, the menu toggle, persistence
+  across relaunch and the stdio MCP server are covered by `tests/e2e/agent.spec.ts` and
+  `packaged.spec.ts`.)
 
 ## Ideas for next iterations
 
