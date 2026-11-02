@@ -2,6 +2,7 @@
 import { app, BrowserWindow, Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { newTab, newUntitledWindow, sendMenuToFocused, showOpenDialog } from './documents'
+import { isAgentEnabled, setAgentEnabled, showAgentSetup } from './agent'
 
 /**
  * Electron gives each menu item a single accelerator, so alternates are hidden
@@ -85,6 +86,25 @@ export function buildMenu(): void {
     {
       label: 'Insert',
       submenu: [{ label: 'Mermaid Diagram…', click: () => sendMenuToFocused('mermaid') }]
+    },
+    {
+      label: 'Agent',
+      submenu: [
+        {
+          id: 'allow-agent-connections',
+          label: 'Allow Agent Connections',
+          type: 'checkbox',
+          checked: isAgentEnabled(),
+          click: (item) => {
+            void setAgentEnabled(item.checked).then((on) => {
+              // Start failed (or stop did): keep the checkbox honest.
+              if (on !== item.checked) item.checked = on
+            })
+          }
+        },
+        { type: 'separator' },
+        { label: 'Set Up Agent Access…', click: () => void showAgentSetup() }
+      ]
     },
     {
       label: 'View',
