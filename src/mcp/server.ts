@@ -141,7 +141,7 @@ export function createServer({ rpc, version }: ServerOptions): McpServer {
     {
       title: 'Update elements',
       description:
-        "Change properties of existing elements by id (from get_scene): move (x, y), resize (width, height), restyle (strokeColor, backgroundColor, fillStyle, strokeWidth, roughness, opacity), or change text (text on a text element; its box is re-measured). Pass only the properties to change. All-or-nothing: if any id is unknown nothing changes. One undo step. Use delete_elements plus add_elements to change an element's type or an arrow's bindings.",
+        "Change properties of existing elements by id (from get_scene): move (x, y), resize (width, height), restyle (strokeColor, backgroundColor, fillStyle, strokeWidth, roughness, opacity), or change text (text on a text element; its box is re-measured). A bound label follows its container when the container moves or resizes. Pass only the properties to change. All-or-nothing: if any id is unknown nothing changes. One undo step. Use delete_elements plus add_elements to change an element's type or an arrow's bindings.",
       inputSchema: z.object({
         docId,
         elements: z

@@ -3,6 +3,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import {
   applyPatch,
   arrowBinding,
+  boundTextPosition,
   commonBounds,
   isAgentError,
   planDelete,
@@ -232,6 +233,18 @@ describe('applyPatch', () => {
       expect(isAgentError(err)).toBe(true)
       expect((err as { code: string }).code).toBe('BAD_PARAMS')
     }
+  })
+})
+
+describe('boundTextPosition', () => {
+  it('centres a label in its container by default', () => {
+    expect(boundTextPosition(rect, label as never)).toEqual({ x: 90, y: 60 })
+  })
+  it('honours textAlign and verticalAlign with the padding', () => {
+    const left = { ...label, textAlign: 'left', verticalAlign: 'top' } as never
+    expect(boundTextPosition(rect, left)).toEqual({ x: 15, y: 25 })
+    const right = { ...label, textAlign: 'right', verticalAlign: 'bottom' } as never
+    expect(boundTextPosition(rect, right)).toEqual({ x: 165, y: 95 })
   })
 })
 

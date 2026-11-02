@@ -37,6 +37,7 @@ import {
   agentError,
   applyPatch,
   arrowBinding,
+  boundTextPosition,
   commonBounds,
   MAX_ELEMENTS_PER_CALL,
   planDelete,
@@ -270,11 +271,19 @@ const updateElements: OpImpl<'updateElements'> = async ({ api }, raw) => {
   }
   const scene = readScene(api)
   const replaced = new Map<string, ExcalidrawElement>()
-  const remeasure: string[] = []
+  const remeasure = new Set<string>()
+  // Labels to put back in place: their own text changed or their container moved.
+  const reposition = new Set<string>()
+  const patched = new Set<string>()
+  const labelOf = (el: ExcalidrawElement): ExcalidrawTextElement | undefined => {
+    const bound = el.boundElements?.find((b) => b.type === 'text')
+    return bound ? (scene.live.get(bound.id) as ExcalidrawTextElement | undefined) : undefined
+  }
   for (const patch of p.elements as unknown[]) {
     if (!isRecord(patch) || typeof patch.id !== 'string') bad('each element patch needs an id')
     const el = scene.live.get(patch.id) ?? bad(`no element with id "${patch.id}"`)
-    if (replaced.has(el.id)) bad(`element ${el.id} appears twice`)
+    if (patched.has(el.id)) bad(`element ${el.id} appears twice`)
+    patched.add(el.id)
     const { changes, textChanged } = applyPatch(el, patch as ElementPatch)
     if (
       typeof changes.frameId === 'string' &&
@@ -286,7 +295,19 @@ const updateElements: OpImpl<'updateElements'> = async ({ api }, raw) => {
       bad(`element ${el.id}: unknown fileId "${changes.fileId}"`)
     }
     replaced.set(el.id, newElementWith(el, changes as Partial<ExcalidrawElement>))
-    if (textChanged) remeasure.push(el.id)
+    if (textChanged) {
+      remeasure.add(el.id)
+      if ((el as ExcalidrawTextElement).containerId) reposition.add(el.id)
+    }
+    // A moved or resized container carries its label along: the label is
+    // re-wrapped when the box changed size and recentred either way.
+    const moved = ['x', 'y', 'width', 'height'].some((k) => k in changes)
+    const label = el.type !== 'text' && moved ? labelOf(el) : undefined
+    if (label) {
+      if (!replaced.has(label.id)) replaced.set(label.id, label)
+      if ('width' in changes || 'height' in changes) remeasure.add(label.id)
+      reposition.add(label.id)
+    }
   }
   // Re-measure changed texts (wrapping inside their container) on the smallest
   // subset that keeps the container reference alive, and take only the
@@ -304,6 +325,11 @@ const updateElements: OpImpl<'updateElements'> = async ({ api }, raw) => {
     if (!measured) continue
     const { x, y, width, height } = measured
     replaced.set(id, newElementWith(text, { x, y, width, height, text: measured.text }))
+  }
+  for (const id of reposition) {
+    const text = replaced.get(id) as ExcalidrawTextElement
+    const container = replaced.get(text.containerId!) ?? scene.live.get(text.containerId!)
+    if (container) replaced.set(id, newElementWith(text, boundTextPosition(container, text)))
   }
   commit(api, scene, replaced)
   return { updated: [...replaced.keys()], bounds: commonBounds([...replaced.values()]) }

@@ -377,6 +377,31 @@ export function applyPatch(el: ExcalidrawElement, patch: ElementPatch): AppliedP
   return { changes, textChanged }
 }
 
+// ---- bound text ---------------------------------------------------------------
+
+/** Excalidraw's inset between a container's edge and its bound text. */
+export const BOUND_TEXT_PADDING = 5
+
+/**
+ * Where a container's bound label belongs, honouring the label's textAlign and
+ * verticalAlign (centre / middle by default). The container's whole box is
+ * used for every shape; for ellipses and diamonds that matches Excalidraw
+ * exactly only for centred text, which is what labels use.
+ */
+export function boundTextPosition(
+  container: ExcalidrawElement,
+  text: ExcalidrawTextElement
+): { x: number; y: number } {
+  const pad = BOUND_TEXT_PADDING
+  let x = container.x + (container.width - text.width) / 2
+  if (text.textAlign === 'left') x = container.x + pad
+  else if (text.textAlign === 'right') x = container.x + container.width - text.width - pad
+  let y = container.y + (container.height - text.height) / 2
+  if (text.verticalAlign === 'top') y = container.y + pad
+  else if (text.verticalAlign === 'bottom') y = container.y + container.height - text.height - pad
+  return { x, y }
+}
+
 // ---- add ----------------------------------------------------------------------
 
 /** Keys stripped from skeletons: Excalidraw assigns these. */

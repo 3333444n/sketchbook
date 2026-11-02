@@ -152,6 +152,18 @@ test.describe('agent bridge (socket)', () => {
     scene = await rpc('getScene', { docId })
     expect(byId('db')).toMatchObject({ x: 50, y: 60, label: 'Postgres' })
     expect(byId(dbLabel!.id)?.text).toBe('Postgres')
+    // The label travels with its container and stays centred, also on a resize.
+    const centred = (): void => {
+      const box = byId('db')!
+      const text = byId(dbLabel!.id)!
+      expect(Math.abs(text.x + text.width / 2 - (box.x + box.width / 2))).toBeLessThan(1)
+      expect(Math.abs(text.y + text.height / 2 - (box.y + box.height / 2))).toBeLessThan(1)
+    }
+    centred()
+    await rpc('updateElements', { docId, elements: [{ id: 'db', width: 300, height: 120 }] })
+    scene = await rpc('getScene', { docId })
+    expect(byId('db')).toMatchObject({ width: 300, height: 120 })
+    centred()
 
     // exportImage: a real PNG with the requested size cap.
     const image = await rpc('exportImage', { docId, maxSize: 600 })
