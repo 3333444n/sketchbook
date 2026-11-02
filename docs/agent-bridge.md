@@ -6,6 +6,9 @@ you are looking at, and look at the result as an image. Everything stays on your
 agent talks to the app over a local socket, and Sketchbook still makes no network requests.
 Decision record: [ADR 0009](adr/0009-agent-bridge-unix-socket-mcp.md).
 
+The bridge landed after v1.0.0: the v1.0.0 dmg on GitHub does not include it. Use the next
+release, or [build from source](building-and-releasing.md) (`pnpm build:mac`).
+
 ## User guide
 
 ### What it does
@@ -111,7 +114,7 @@ of the focused window (or the last focused one). Results are JSON text, except `
 | `new_drawing`     | `title?` (≤ 200 chars; sanitised like a file name)                                                                                           | The new tab's `{ docId, title, path: null, dirty, active, windowId }`. Opens in the current window, becomes active.                                                                                                                             |
 | `get_scene`       | `docId?`, `full?`                                                                                                                            | `{ docId, title, elementCount, bounds, viewBackgroundColor, selectedIds, elements }`; `elements` are compact summaries (id, type, x, y, width, height, text/label, arrow `start`/`end`, colours…) or raw Excalidraw elements with `full: true`. |
 | `add_elements`    | `docId?`, `elements[]` (1–2000 skeletons, see cheat sheet), `scrollTo?` (default true)                                                       | `{ ids, bounds }` of the created elements (labels included). One undo step.                                                                                                                                                                     |
-| `update_elements` | `docId?`, `elements[]` (1–2000 patches `{ id, …changes }`)                                                                                   | `{ updated, bounds }`. All-or-nothing: any unknown id, unknown key or wrong value rejects the whole call. One undo step.                                                                                                                        |
+| `update_elements` | `docId?`, `elements[]` (1–2000 patches `{ id, …changes }`)                                                                                   | `{ updated, bounds }`. All-or-nothing: any unknown id, unknown key or wrong value rejects the whole call. Bound labels follow their container. One undo step.                                                                                   |
 | `delete_elements` | `docId?`, `ids[]` (1–5000)                                                                                                                   | `{ deleted }`. Bound labels go with their shape; arrows bound to a deleted shape are unbound. Unknown ids are ignored. One undo step.                                                                                                           |
 | `get_image`       | `docId?`, `ids?`, `maxSize?` (256–4096, default 1200), `background?` (default true), `dark?` (default false), `padding?` (0–500, default 20) | A PNG image, then a text line `W×Hpx, N elements`. Rendered in the app with its bundled fonts.                                                                                                                                                  |
 | `scroll_to`       | `docId?`, `ids?`                                                                                                                             | `{ ok: true }`. Scrolls and zooms the user's canvas to the elements (or the whole drawing). No change to the drawing.                                                                                                                           |
@@ -153,6 +156,11 @@ text (the box is re-measured); `points`, `startArrowhead`, `endArrowhead` on arr
 `name` on frames; `fileId`, `scale` on images. Read-only keys (`id`, `type`, `version`,
 `boundElements`, `containerId`, `startBinding`, `endBinding`…) are ignored; any other key is
 rejected. To change an element's type or an arrow's bindings, delete and re-add it.
+
+A bound label follows its container: moving the container moves the label, resizing it
+re-wraps the label to the new width, and changing a label's `text` (or the container's size)
+re-centres it per its `textAlign` / `verticalAlign`. The patch targets the container or the
+label by its own id; there is no need to update both.
 
 ## Developer reference
 

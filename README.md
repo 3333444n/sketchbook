@@ -161,9 +161,10 @@ the drawing you're looking at, add or change shapes, text and arrows, and look a
 as an image. Every agent edit is one undo step (⌘Z), marks the tab unsaved, and never touches
 your file until you press ⌘S.
 
-1. In Sketchbook, turn on **Agent ▸ Allow Agent Connections** (off by default; remembered).
-2. Choose **Agent ▸ Set Up Agent Access…** and copy the config for your agent. For Claude
-   Code it's one command:
+1. In Sketchbook, turn on **Allow agent connections**, from the **Agent** menu in the menu
+   bar or from the ☰ menu in the top-left corner of the canvas (off by default; remembered).
+2. Choose **Set up agent access…** (same two places) and copy the config for your agent. For
+   Claude Code it's one command:
 
    ```sh
    claude mcp add sketchbook -e ELECTRON_RUN_AS_NODE=1 -- "/Applications/Sketchbook.app/Contents/MacOS/Sketchbook" "/Applications/Sketchbook.app/Contents/Resources/mcp/index.js"
@@ -171,6 +172,8 @@ your file until you press ⌘S.
 
 3. Ask: "Draw this repo's architecture in Sketchbook" or "Fix the overlapping boxes in my
    drawing and show me."
+
+The v1.0.0 download does not include this; it needs a newer release or a build from source.
 
 The agent talks to the app over a local socket on your Mac; Sketchbook still makes no network
 requests. Config for Claude Desktop, Cursor and Codex, the tool reference and the security

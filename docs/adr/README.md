@@ -32,4 +32,4 @@ footprint. Bug fixes and features that fit the existing design don't need one.
 | [0006](0006-tabs-with-mru-editor-budget.md)        | Tabs in one renderer with an MRU budget of 5 mounted editors                | Accepted | 2026-10-22 |
 | [0007](0007-frameless-window-custom-tab-strip.md)  | Frameless window with a custom tab strip                                    | Accepted | 2026-10-22 |
 | [0008](0008-product-name-and-attribution.md)       | Product name "Sketchbook" and Excalidraw attribution                        | Accepted | 2026-10-22 |
-| [0009](0009-agent-bridge-unix-socket-mcp.md)       | Local agent bridge over a Unix socket with a bundled MCP server             | Proposed | 2026-11-02 |
+| [0009](0009-agent-bridge-unix-socket-mcp.md)       | Local agent bridge over a Unix socket with a bundled MCP server             | Accepted | 2026-11-02 |

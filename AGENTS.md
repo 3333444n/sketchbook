@@ -19,7 +19,9 @@ electron-builder 26 (ad-hoc-signed arm64 dmg), Vitest, Playwright `_electron`.
 ## Status
 
 v1.0.0 is released (2026-10-22, <https://github.com/3333444n/sketchbook/releases/tag/v1.0.0>).
-There is no auto-update or update check. What's verified, what isn't, and candidate next
+There is no auto-update or update check. The agent bridge (opt-in Unix socket plus bundled
+MCP server) landed after v1.0.0 and is documented in
+[docs/agent-bridge.md](docs/agent-bridge.md). What's verified, what isn't, and candidate next
 steps (update mechanism, signing, CI coverage): [docs/roadmap.md](docs/roadmap.md).
 
 ## Repo map
@@ -54,8 +56,9 @@ steps (update mechanism, signing, CI coverage): [docs/roadmap.md](docs/roadmap.m
 | `src/renderer/src/shortcuts.ts`       | Capture-phase key handlers: yield menu-owned keys to the native menu, ⌘1–⌘9, stray-key forwarding.                                                                                                           |
 | `src/renderer/src/portalGuard.ts`     | Hides dialog portals that belong to hidden editors (see Gotchas).                                                                                                                                            |
 | `src/renderer/src/agentOps.ts`        | The per-document agent ops (`getScene`, `addElements`, `updateElements`, `deleteElements`, `exportImage`, `scrollTo`) against one editor's Excalidraw API; each edit is one undo step.                       |
-| `src/renderer/src/agentScene.ts`      | Pure helpers for `agentOps`: summaries, bounds, skeleton/patch validation, delete planning, arrow routing. Type-only imports, node-testable.                                                                 |
-| `src/renderer/src/components/`        | `TabStrip` (incl. double-click rename), `AppMainMenu`, `AppWelcomeScreen`, icons.                                                                                                                            |
+| `src/renderer/src/agentScene.ts`      | Pure helpers for `agentOps`: summaries, bounds, skeleton/patch validation, delete planning, arrow routing, bound-label placement. Type-only imports, node-testable.                                          |
+| `src/renderer/src/agentMenu.tsx`      | Window-level bridge on/off state for the in-app main menu (context mirrored from main via `getAgentEnabled` / `onAgentEnabledChanged`).                                                                      |
+| `src/renderer/src/components/`        | `TabStrip` (incl. double-click rename), `AppMainMenu` (incl. the agent toggle and setup items), `AppWelcomeScreen`, icons.                                                                                   |
 | `src/mcp/`                            | The bundled stdio MCP server: `server.ts` (8 tools, zod), `client.ts` (pointer file, socket RPC), `index.ts`. Built to `out/main/mcp.js`, shipped as `Resources/mcp/index.js`. **Never imports `electron`.** |
 | `electron.vite.config.ts`             | Build, including the Excalidraw offline patches (see Gotchas).                                                                                                                                               |
 | `electron-builder.yml`                | Packaging (ad-hoc-signed arm64 dmg, `.excalidraw` file association).                                                                                                                                         |

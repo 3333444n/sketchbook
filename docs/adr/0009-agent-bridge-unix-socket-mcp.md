@@ -1,6 +1,6 @@
 # 0009. Local agent bridge over a Unix socket with a bundled MCP server
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-02
 
 ## Context
